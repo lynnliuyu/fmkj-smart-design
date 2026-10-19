@@ -1,6 +1,6 @@
 # 第三方许可与素材说明
 
-Copyright (c) 2026 Contributors。项目自有代码采用 [GPL-3.0-only](LICENSE)；依赖与第三方作品保留其原有许可。此声明不向第三方工具、字体、素材或品牌商标授予额外权利。
+Copyright (c) 2026 Contributors。项目自有代码采用 [MIT](LICENSE)；依赖与第三方作品保留其原有许可。此声明不向第三方工具、字体、素材或品牌商标授予额外权利。
 
 ## 已核对的直接依赖
 
@@ -11,7 +11,7 @@ Copyright (c) 2026 Contributors。项目自有代码采用 [GPL-3.0-only](LICENS
 | `@mlightcad/libredwg-web` | 0.8.0 | `GPL-3.0` | 开发依赖，用于 DWG 读取与 CAD 辅助脚本；[上游](https://github.com/mlightcad/libredwg-web) |
 | `@vercel/analytics` | 1.3.1 | `MPL-2.0` | 分析组件；[上游](https://github.com/vercel/analytics/tree/main/packages/web) |
 
-`@mlightcad/libredwg-web` 的包元数据使用历史标识 `GPL-3.0`；该标识不能替代对其上游具体授权范围的确认。不要将本项目 `GPL-3.0-only` 选择反向覆盖到依赖。`@vercel/analytics` 随包附带 `LICENSE`，分发时需保留其声明。Next.js、React、图标库、数据库驱动及其他依赖的具体条款请以锁定版本随包许可和上游声明为准，不能将全部依赖描述成 MIT。
+`@mlightcad/libredwg-web` 的包元数据使用历史标识 `GPL-3.0`；该标识不能替代对其上游具体授权范围的确认。本项目自有代码的 MIT 授权不改变该依赖的 GPL 条款。`@vercel/analytics` 随包附带 `LICENSE`，分发时需保留其声明。Next.js、React、图标库、数据库驱动及其他依赖的具体条款请以锁定版本随包许可和上游声明为准，不能将全部依赖描述成 MIT。
 
 发布二进制、容器镜像或依赖副本前，应复核实际包含的依赖、上游源码和许可文本，并按各自要求保留版权、许可及源码获取说明。本轮未完成全部传递依赖审计。
 
@@ -23,4 +23,4 @@ Copyright (c) 2026 Contributors。项目自有代码采用 [GPL-3.0-only](LICENS
 
 CADCraft、PDFCraft CLI、Poppler、Python 包与可嵌入中文字体不随项目重新授权。它们需单独安装，使用者应检查各自条款；仓库脚本调用工具不等于获得再分发授权。可选 CAD 脚本需要 Node.js 24+，应用基础运行要求为 Node.js 22+。
 
-项目 GPL 不自动覆盖独立工具、依赖或商标。该说明记录已核对范围，尚不构成全面权利审计结论。
+项目 MIT 不自动覆盖独立工具、依赖或商标。该说明记录已核对范围，尚不构成全面权利审计结论。

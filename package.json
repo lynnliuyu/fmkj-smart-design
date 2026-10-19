@@ -78,5 +78,20 @@
     "typescript": "^5.9.3",
     "vitest": "^4.1.9"
   },
-  "license": "GPL-3.0-only"
+  "license": "MIT",
+  "description": "一个帮智能家居设计师、安装服务商和小团队做方案、出报价、管项目的开源工具。把客户项目、设备点位、产品清单和报价单放在一起管理。关键词：智能家居、全屋智能、点位图设计、产品选型、报价系统、项目管理。",
+  "keywords": [
+    "智能家居",
+    "全屋智能",
+    "点位图设计",
+    "产品选型",
+    "报价系统",
+    "项目管理",
+    "smart-home",
+    "home-automation",
+    "nextjs",
+    "react",
+    "typescript",
+    "postgresql"
+  ]
 }

@@ -1,12 +1,25 @@
 # 繁梦空间设计站 · FMKJ V3
 
-面向智能家居设计的项目管理、点位设计、产品选型、报价与固定版本交付系统。技术栈为 Next.js 16、React 19、TypeScript、PostgreSQL 和 Vitest。
+一个帮**智能家居设计师、安装服务商和小团队**做方案、出报价、管项目的开源工具。把客户项目、设备点位、产品清单和报价单放在一起管理。
+
+你可以用它：
+
+- **画点位图**：在户型图上标出开关、窗帘、网络设备等安装位置。
+- **整理产品**：把设备型号、规格和价格放进自己的产品库。
+- **做方案报价**：按项目整理设备清单和报价单。
+- **交付客户**：保留确认版本，导出方案与报价资料。
+
+第一次接触？先看[新手上手指南](docs/getting-started.md)，按步骤完成安装、创建账号和第一次登录。当前提供的是需要在电脑上运行的源码，尚无双击即用的安装包。
+
+关键词：**智能家居 · 全屋智能 · 点位图设计 · 产品选型 · 报价系统 · 项目管理 · Next.js · React · TypeScript · PostgreSQL**。
 
 源码仓库：[lynnliuyu/fmkj-smart-design](https://github.com/lynnliuyu/fmkj-smart-design)。
 
 此版本提供应用源码、数据库迁移和中性 SVG 符号；**产品库初始为空，不附带客户资料、真实产品图片、渠道价格或历史交付文件**。请自行准备有权使用的商品资料与图片，按[产品采集指南](docs/product-catalog-agent-guide.md)入库。数据库迁移会建立基础角色与套餐等系统数据；管理员需另行创建。
 
-## 本机开始
+## 本机开始（熟悉命令行可直接使用）
+
+技术栈：Next.js 16、React 19、TypeScript、PostgreSQL、Vitest。
 
 需要 Node.js 22+、pnpm 12，以及 PostgreSQL。以下本地数据库方式另需 Docker Engine / Docker Desktop 与 Compose v2。可选 CAD 工作流需要 Node.js 24+，详见下文。
 
@@ -97,6 +110,6 @@ docker compose up -d app
 
 ## 许可证
 
-Copyright (c) 2026 Contributors。项目自有代码采用 **GPL-3.0-only**，全文见 [LICENSE](LICENSE)。这允许商业使用；传播受 GPL 覆盖的修改版时需遵守相应源码与许可义务，以许可证全文为准。
+Copyright (c) 2026 Contributors。项目自有代码采用 **MIT**，全文见 [LICENSE](LICENSE)。允许使用、修改、分发及商业使用，保留许可证要求的版权与许可声明。
 
-依赖、第三方工具、字体及品牌商标保留各自权利，不会因本项目的 GPL 自动重新授权。已核对的直接依赖与素材说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)；尚未完成全部传递依赖的许可审计。
+依赖、第三方工具、字体及品牌商标保留各自权利，不会因本项目的 MIT 自动重新授权。已核对的直接依赖与素材说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)；尚未完成全部传递依赖的许可审计。

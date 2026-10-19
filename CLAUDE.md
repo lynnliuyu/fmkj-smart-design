@@ -62,5 +62,5 @@ pnpm run doctor
 AUTH_SECRET 用于会话签名；生产必须独立生成，禁用 AUTH_DEV_MODE。
 公开 Blob URL 不适合保密附件。短信与邮件尚未接入生产。
 可选 CAD/PDF CLI、Poppler、Python 库和中文字体需单独安装并确认授权。
-GPL-3.0-only 适用于项目自有代码；保留第三方原有许可与声明。
+MIT 适用于项目自有代码；保留第三方原有许可与声明。
 贡献见 CONTRIBUTING.md，漏洞见 SECURITY.md。

@@ -1,5 +1,7 @@
 # Fork report
 
+> 历史记录：本报告记录首次 GPL-3.0 发布时的状态。项目所有者随后于 2026-10-19 将项目自有代码改为 MIT；当前许可见根目录 LICENSE。第三方许可保持各自声明。
+
 Status: local text-only candidate prepared; independent sanitization and packaging remain required.
 License selected by the owner: GPL-3.0. The packager must add the precise GPL-3.0-only license and dependency notices.
 No remote was configured or published. Source history, database and services were not modified by this stage.
