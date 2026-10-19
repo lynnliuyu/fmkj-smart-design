@@ -1,0 +1,331 @@
+{
+  "coordinateSystem": "page-points-top-left",
+  "version": 1,
+  "slots": [
+    {
+      "name": "project.name",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        38,
+        192,
+        557,
+        258
+      ],
+      "fontSize": 24,
+      "maxLines": 2
+    },
+    {
+      "name": "project.customer",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        128,
+        284,
+        557,
+        319
+      ],
+      "fontSize": 11,
+      "maxLines": 2
+    },
+    {
+      "name": "project.address",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        128,
+        328,
+        557,
+        363
+      ],
+      "fontSize": 11,
+      "maxLines": 2
+    },
+    {
+      "name": "project.code",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        128,
+        372,
+        557,
+        407
+      ],
+      "fontSize": 11,
+      "maxLines": 2
+    },
+    {
+      "name": "project.version",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        128,
+        416,
+        557,
+        451
+      ],
+      "fontSize": 11,
+      "maxLines": 2
+    },
+    {
+      "name": "project.date",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        38,
+        749,
+        338,
+        769
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "project.designer",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        340,
+        749,
+        557,
+        769
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "floors.0.name",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        38,
+        90,
+        438,
+        120
+      ],
+      "fontSize": 19,
+      "maxLines": 1
+    },
+    {
+      "name": "proposal.floor.001.image",
+      "pdfFieldName": "proposal_floor_001_image",
+      "kind": "pdfcraft-image",
+      "page": 2,
+      "rect": [
+        38,
+        139,
+        803.8897637795277,
+        512
+      ],
+      "sourcePath": "floors[0].imageSlot"
+    },
+    {
+      "name": "scenes.0.name",
+      "kind": "source-text",
+      "page": 3,
+      "rect": [
+        75,
+        181,
+        535,
+        208
+      ],
+      "fontSize": 16,
+      "maxLines": 1
+    },
+    {
+      "name": "scenes.0.trigger",
+      "kind": "source-text",
+      "page": 3,
+      "rect": [
+        126,
+        213,
+        556,
+        243
+      ],
+      "fontSize": 9.5,
+      "maxLines": 2
+    },
+    {
+      "name": "scenes.0.actions",
+      "kind": "source-text",
+      "page": 3,
+      "rect": [
+        126,
+        244,
+        556,
+        286
+      ],
+      "fontSize": 9.5,
+      "maxLines": 3
+    },
+    {
+      "name": "scenes.0.points",
+      "kind": "source-text",
+      "page": 3,
+      "rect": [
+        75,
+        295,
+        555,
+        320
+      ],
+      "fontSize": 8,
+      "maxLines": 2
+    },
+    {
+      "name": "scenes.1.name",
+      "kind": "source-text",
+      "page": 3,
+      "rect": [
+        75,
+        325,
+        535,
+        352
+      ],
+      "fontSize": 16,
+      "maxLines": 1
+    },
+    {
+      "name": "scenes.1.trigger",
+      "kind": "source-text",
+      "page": 3,
+      "rect": [
+        126,
+        357,
+        556,
+        387
+      ],
+      "fontSize": 9.5,
+      "maxLines": 2
+    },
+    {
+      "name": "scenes.1.actions",
+      "kind": "source-text",
+      "page": 3,
+      "rect": [
+        126,
+        388,
+        556,
+        430
+      ],
+      "fontSize": 9.5,
+      "maxLines": 3
+    },
+    {
+      "name": "scenes.1.points",
+      "kind": "source-text",
+      "page": 3,
+      "rect": [
+        75,
+        439,
+        555,
+        464
+      ],
+      "fontSize": 8,
+      "maxLines": 2
+    },
+    {
+      "name": "scenes.2.name",
+      "kind": "source-text",
+      "page": 3,
+      "rect": [
+        75,
+        469,
+        535,
+        496
+      ],
+      "fontSize": 16,
+      "maxLines": 1
+    },
+    {
+      "name": "scenes.2.trigger",
+      "kind": "source-text",
+      "page": 3,
+      "rect": [
+        126,
+        501,
+        556,
+        531
+      ],
+      "fontSize": 9.5,
+      "maxLines": 2
+    },
+    {
+      "name": "scenes.2.actions",
+      "kind": "source-text",
+      "page": 3,
+      "rect": [
+        126,
+        532,
+        556,
+        574
+      ],
+      "fontSize": 9.5,
+      "maxLines": 3
+    },
+    {
+      "name": "scenes.2.points",
+      "kind": "source-text",
+      "page": 3,
+      "rect": [
+        75,
+        583,
+        555,
+        608
+      ],
+      "fontSize": 8,
+      "maxLines": 2
+    },
+    {
+      "name": "scenes.3.name",
+      "kind": "source-text",
+      "page": 3,
+      "rect": [
+        75,
+        613,
+        535,
+        640
+      ],
+      "fontSize": 16,
+      "maxLines": 1
+    },
+    {
+      "name": "scenes.3.trigger",
+      "kind": "source-text",
+      "page": 3,
+      "rect": [
+        126,
+        645,
+        556,
+        675
+      ],
+      "fontSize": 9.5,
+      "maxLines": 2
+    },
+    {
+      "name": "scenes.3.actions",
+      "kind": "source-text",
+      "page": 3,
+      "rect": [
+        126,
+        676,
+        556,
+        718
+      ],
+      "fontSize": 9.5,
+      "maxLines": 3
+    },
+    {
+      "name": "scenes.3.points",
+      "kind": "source-text",
+      "page": 3,
+      "rect": [
+        75,
+        727,
+        555,
+        752
+      ],
+      "fontSize": 8,
+      "maxLines": 2
+    }
+  ]
+}

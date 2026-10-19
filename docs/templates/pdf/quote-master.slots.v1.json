@@ -1,0 +1,1462 @@
+{
+  "coordinateSystem": "page-points-top-left",
+  "version": 1,
+  "slots": [
+    {
+      "name": "quote.p001.project",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        38,
+        130,
+        557,
+        156
+      ],
+      "fontSize": 13,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.customer",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        38,
+        169,
+        263,
+        189
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.number",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        300,
+        169,
+        557,
+        189
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.date",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        38,
+        186,
+        263,
+        202
+      ],
+      "fontSize": 8,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.validity",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        300,
+        186,
+        557,
+        202
+      ],
+      "fontSize": 8,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r001.image",
+      "pdfFieldName": "quote_p001_r001_image",
+      "kind": "pdfcraft-image",
+      "page": 1,
+      "rect": [
+        66,
+        245,
+        96,
+        279
+      ],
+      "sourcePath": "quote.items[0].imageSlot"
+    },
+    {
+      "name": "quote.p001.r001.name",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        109,
+        241,
+        251,
+        280
+      ],
+      "fontSize": 9.2,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p001.r001.sku",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        109,
+        280,
+        251,
+        292
+      ],
+      "fontSize": 7,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r001.room",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        263,
+        245,
+        338,
+        288
+      ],
+      "fontSize": 8.7,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p001.r001.quantity",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        346,
+        256,
+        386,
+        278
+      ],
+      "fontSize": 8.6,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r001.unitPrice",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        394,
+        256,
+        462,
+        278
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r001.lineTotal",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        472,
+        256,
+        552,
+        278
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r002.image",
+      "pdfFieldName": "quote_p001_r002_image",
+      "kind": "pdfcraft-image",
+      "page": 1,
+      "rect": [
+        66,
+        309,
+        96,
+        343
+      ],
+      "sourcePath": "quote.items[1].imageSlot"
+    },
+    {
+      "name": "quote.p001.r002.name",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        109,
+        305,
+        251,
+        344
+      ],
+      "fontSize": 9.2,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p001.r002.sku",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        109,
+        344,
+        251,
+        356
+      ],
+      "fontSize": 7,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r002.room",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        263,
+        309,
+        338,
+        352
+      ],
+      "fontSize": 8.7,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p001.r002.quantity",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        346,
+        320,
+        386,
+        342
+      ],
+      "fontSize": 8.6,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r002.unitPrice",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        394,
+        320,
+        462,
+        342
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r002.lineTotal",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        472,
+        320,
+        552,
+        342
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r003.image",
+      "pdfFieldName": "quote_p001_r003_image",
+      "kind": "pdfcraft-image",
+      "page": 1,
+      "rect": [
+        66,
+        373,
+        96,
+        407
+      ],
+      "sourcePath": "quote.items[2].imageSlot"
+    },
+    {
+      "name": "quote.p001.r003.name",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        109,
+        369,
+        251,
+        408
+      ],
+      "fontSize": 9.2,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p001.r003.sku",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        109,
+        408,
+        251,
+        420
+      ],
+      "fontSize": 7,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r003.room",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        263,
+        373,
+        338,
+        416
+      ],
+      "fontSize": 8.7,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p001.r003.quantity",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        346,
+        384,
+        386,
+        406
+      ],
+      "fontSize": 8.6,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r003.unitPrice",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        394,
+        384,
+        462,
+        406
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r003.lineTotal",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        472,
+        384,
+        552,
+        406
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r004.image",
+      "pdfFieldName": "quote_p001_r004_image",
+      "kind": "pdfcraft-image",
+      "page": 1,
+      "rect": [
+        66,
+        437,
+        96,
+        471
+      ],
+      "sourcePath": "quote.items[3].imageSlot"
+    },
+    {
+      "name": "quote.p001.r004.name",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        109,
+        433,
+        251,
+        472
+      ],
+      "fontSize": 9.2,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p001.r004.sku",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        109,
+        472,
+        251,
+        484
+      ],
+      "fontSize": 7,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r004.room",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        263,
+        437,
+        338,
+        480
+      ],
+      "fontSize": 8.7,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p001.r004.quantity",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        346,
+        448,
+        386,
+        470
+      ],
+      "fontSize": 8.6,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r004.unitPrice",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        394,
+        448,
+        462,
+        470
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r004.lineTotal",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        472,
+        448,
+        552,
+        470
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r005.image",
+      "pdfFieldName": "quote_p001_r005_image",
+      "kind": "pdfcraft-image",
+      "page": 1,
+      "rect": [
+        66,
+        501,
+        96,
+        535
+      ],
+      "sourcePath": "quote.items[4].imageSlot"
+    },
+    {
+      "name": "quote.p001.r005.name",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        109,
+        497,
+        251,
+        536
+      ],
+      "fontSize": 9.2,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p001.r005.sku",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        109,
+        536,
+        251,
+        548
+      ],
+      "fontSize": 7,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r005.room",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        263,
+        501,
+        338,
+        544
+      ],
+      "fontSize": 8.7,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p001.r005.quantity",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        346,
+        512,
+        386,
+        534
+      ],
+      "fontSize": 8.6,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r005.unitPrice",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        394,
+        512,
+        462,
+        534
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r005.lineTotal",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        472,
+        512,
+        552,
+        534
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r006.image",
+      "pdfFieldName": "quote_p001_r006_image",
+      "kind": "pdfcraft-image",
+      "page": 1,
+      "rect": [
+        66,
+        565,
+        96,
+        599
+      ],
+      "sourcePath": "quote.items[5].imageSlot"
+    },
+    {
+      "name": "quote.p001.r006.name",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        109,
+        561,
+        251,
+        600
+      ],
+      "fontSize": 9.2,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p001.r006.sku",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        109,
+        600,
+        251,
+        612
+      ],
+      "fontSize": 7,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r006.room",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        263,
+        565,
+        338,
+        608
+      ],
+      "fontSize": 8.7,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p001.r006.quantity",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        346,
+        576,
+        386,
+        598
+      ],
+      "fontSize": 8.6,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r006.unitPrice",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        394,
+        576,
+        462,
+        598
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r006.lineTotal",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        472,
+        576,
+        552,
+        598
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r007.image",
+      "pdfFieldName": "quote_p001_r007_image",
+      "kind": "pdfcraft-image",
+      "page": 1,
+      "rect": [
+        66,
+        629,
+        96,
+        663
+      ],
+      "sourcePath": "quote.items[6].imageSlot"
+    },
+    {
+      "name": "quote.p001.r007.name",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        109,
+        625,
+        251,
+        664
+      ],
+      "fontSize": 9.2,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p001.r007.sku",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        109,
+        664,
+        251,
+        676
+      ],
+      "fontSize": 7,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r007.room",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        263,
+        629,
+        338,
+        672
+      ],
+      "fontSize": 8.7,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p001.r007.quantity",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        346,
+        640,
+        386,
+        662
+      ],
+      "fontSize": 8.6,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r007.unitPrice",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        394,
+        640,
+        462,
+        662
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p001.r007.lineTotal",
+      "kind": "source-text",
+      "page": 1,
+      "rect": [
+        472,
+        640,
+        552,
+        662
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.project",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        38,
+        130,
+        557,
+        156
+      ],
+      "fontSize": 13,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.customer",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        38,
+        169,
+        263,
+        189
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.number",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        300,
+        169,
+        557,
+        189
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.date",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        38,
+        186,
+        263,
+        202
+      ],
+      "fontSize": 8,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.validity",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        300,
+        186,
+        557,
+        202
+      ],
+      "fontSize": 8,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r001.image",
+      "pdfFieldName": "quote_p002_r001_image",
+      "kind": "pdfcraft-image",
+      "page": 2,
+      "rect": [
+        66,
+        245,
+        96,
+        279
+      ],
+      "sourcePath": "quote.items[7].imageSlot"
+    },
+    {
+      "name": "quote.p002.r001.name",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        109,
+        241,
+        251,
+        280
+      ],
+      "fontSize": 9.2,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p002.r001.sku",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        109,
+        280,
+        251,
+        292
+      ],
+      "fontSize": 7,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r001.room",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        263,
+        245,
+        338,
+        288
+      ],
+      "fontSize": 8.7,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p002.r001.quantity",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        346,
+        256,
+        386,
+        278
+      ],
+      "fontSize": 8.6,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r001.unitPrice",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        394,
+        256,
+        462,
+        278
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r001.lineTotal",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        472,
+        256,
+        552,
+        278
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r002.image",
+      "pdfFieldName": "quote_p002_r002_image",
+      "kind": "pdfcraft-image",
+      "page": 2,
+      "rect": [
+        66,
+        309,
+        96,
+        343
+      ],
+      "sourcePath": "quote.items[8].imageSlot"
+    },
+    {
+      "name": "quote.p002.r002.name",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        109,
+        305,
+        251,
+        344
+      ],
+      "fontSize": 9.2,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p002.r002.sku",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        109,
+        344,
+        251,
+        356
+      ],
+      "fontSize": 7,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r002.room",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        263,
+        309,
+        338,
+        352
+      ],
+      "fontSize": 8.7,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p002.r002.quantity",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        346,
+        320,
+        386,
+        342
+      ],
+      "fontSize": 8.6,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r002.unitPrice",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        394,
+        320,
+        462,
+        342
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r002.lineTotal",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        472,
+        320,
+        552,
+        342
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r003.image",
+      "pdfFieldName": "quote_p002_r003_image",
+      "kind": "pdfcraft-image",
+      "page": 2,
+      "rect": [
+        66,
+        373,
+        96,
+        407
+      ],
+      "sourcePath": "quote.items[9].imageSlot"
+    },
+    {
+      "name": "quote.p002.r003.name",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        109,
+        369,
+        251,
+        408
+      ],
+      "fontSize": 9.2,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p002.r003.sku",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        109,
+        408,
+        251,
+        420
+      ],
+      "fontSize": 7,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r003.room",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        263,
+        373,
+        338,
+        416
+      ],
+      "fontSize": 8.7,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p002.r003.quantity",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        346,
+        384,
+        386,
+        406
+      ],
+      "fontSize": 8.6,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r003.unitPrice",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        394,
+        384,
+        462,
+        406
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r003.lineTotal",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        472,
+        384,
+        552,
+        406
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r004.image",
+      "pdfFieldName": "quote_p002_r004_image",
+      "kind": "pdfcraft-image",
+      "page": 2,
+      "rect": [
+        66,
+        437,
+        96,
+        471
+      ],
+      "sourcePath": "quote.items[10].imageSlot"
+    },
+    {
+      "name": "quote.p002.r004.name",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        109,
+        433,
+        251,
+        472
+      ],
+      "fontSize": 9.2,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p002.r004.sku",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        109,
+        472,
+        251,
+        484
+      ],
+      "fontSize": 7,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r004.room",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        263,
+        437,
+        338,
+        480
+      ],
+      "fontSize": 8.7,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p002.r004.quantity",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        346,
+        448,
+        386,
+        470
+      ],
+      "fontSize": 8.6,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r004.unitPrice",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        394,
+        448,
+        462,
+        470
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r004.lineTotal",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        472,
+        448,
+        552,
+        470
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r005.image",
+      "pdfFieldName": "quote_p002_r005_image",
+      "kind": "pdfcraft-image",
+      "page": 2,
+      "rect": [
+        66,
+        501,
+        96,
+        535
+      ],
+      "sourcePath": "quote.items[11].imageSlot"
+    },
+    {
+      "name": "quote.p002.r005.name",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        109,
+        497,
+        251,
+        536
+      ],
+      "fontSize": 9.2,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p002.r005.sku",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        109,
+        536,
+        251,
+        548
+      ],
+      "fontSize": 7,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r005.room",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        263,
+        501,
+        338,
+        544
+      ],
+      "fontSize": 8.7,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p002.r005.quantity",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        346,
+        512,
+        386,
+        534
+      ],
+      "fontSize": 8.6,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r005.unitPrice",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        394,
+        512,
+        462,
+        534
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r005.lineTotal",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        472,
+        512,
+        552,
+        534
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r006.image",
+      "pdfFieldName": "quote_p002_r006_image",
+      "kind": "pdfcraft-image",
+      "page": 2,
+      "rect": [
+        66,
+        565,
+        96,
+        599
+      ],
+      "sourcePath": "quote.items[12].imageSlot"
+    },
+    {
+      "name": "quote.p002.r006.name",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        109,
+        561,
+        251,
+        600
+      ],
+      "fontSize": 9.2,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p002.r006.sku",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        109,
+        600,
+        251,
+        612
+      ],
+      "fontSize": 7,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r006.room",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        263,
+        565,
+        338,
+        608
+      ],
+      "fontSize": 8.7,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p002.r006.quantity",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        346,
+        576,
+        386,
+        598
+      ],
+      "fontSize": 8.6,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r006.unitPrice",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        394,
+        576,
+        462,
+        598
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r006.lineTotal",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        472,
+        576,
+        552,
+        598
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r007.image",
+      "pdfFieldName": "quote_p002_r007_image",
+      "kind": "pdfcraft-image",
+      "page": 2,
+      "rect": [
+        66,
+        629,
+        96,
+        663
+      ],
+      "sourcePath": "quote.items[13].imageSlot"
+    },
+    {
+      "name": "quote.p002.r007.name",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        109,
+        625,
+        251,
+        664
+      ],
+      "fontSize": 9.2,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p002.r007.sku",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        109,
+        664,
+        251,
+        676
+      ],
+      "fontSize": 7,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r007.room",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        263,
+        629,
+        338,
+        672
+      ],
+      "fontSize": 8.7,
+      "maxLines": 3
+    },
+    {
+      "name": "quote.p002.r007.quantity",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        346,
+        640,
+        386,
+        662
+      ],
+      "fontSize": 8.6,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r007.unitPrice",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        394,
+        640,
+        462,
+        662
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.p002.r007.lineTotal",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        472,
+        640,
+        552,
+        662
+      ],
+      "fontSize": 9,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.summary.subtotal",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        38,
+        738,
+        191,
+        761
+      ],
+      "fontSize": 12,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.summary.installationFee",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        211,
+        738,
+        364,
+        761
+      ],
+      "fontSize": 12,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.summary.discount",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        384,
+        738,
+        537,
+        761
+      ],
+      "fontSize": 12,
+      "maxLines": 1
+    },
+    {
+      "name": "quote.summary.total",
+      "kind": "source-text",
+      "page": 2,
+      "rect": [
+        419,
+        773,
+        545,
+        797
+      ],
+      "fontSize": 16,
+      "maxLines": 1
+    }
+  ]
+}

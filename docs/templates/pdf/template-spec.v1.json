@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "version": 1,
+  "companyName": "繁梦空间智能设计",
+  "logo": "public/placeholder.svg",
+  "palette": {"ink":"#222D2A","muted":"#74807A","accent":"#426858","line":"#DDE4DF","wash":"#F3F6F3"},
+  "proposal": {"id":"FMKJ-PROPOSAL-001","pageTypes":["overview","floorplan","scenes"],"floorplanOrientation":"landscape","scenesPerPage":4},
+  "quote": {"id":"FMKJ-QUOTE-001","orientation":"portrait","rowsPerPage":7,"columns":[{"key":"number","label":"序号","width":22},{"key":"image","label":"图片","width":42},{"key":"name","label":"商品 / 规格","width":156},{"key":"room","label":"房间 / 区域","width":85},{"key":"quantity","label":"数量","width":46},{"key":"unitPrice","label":"单价","width":78},{"key":"lineTotal","label":"小计","width":90}]},
+  "rules": {"floorplanPages":"one-image-per-page","quoteHeader":"repeat-on-every-page","currencyDecimals":2,"templateAmounts":"never-authoritative","fieldNames":"unique-per-output-page","customerData":"synthetic-only-for-samples"}
+}

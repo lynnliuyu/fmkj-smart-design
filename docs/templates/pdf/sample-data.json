@@ -1,0 +1,456 @@
+{
+  "schemaVersion": 1,
+  "sampleOnly": true,
+  "demoLabel": "模拟试排样稿 · 非客户方案 / 非采购单",
+  "company": {
+    "name": "繁梦空间智能设计",
+    "logoSlot": "brand.logo"
+  },
+  "project": {
+    "name": "版式试排样稿（虚构项目）",
+    "customer": "示例客户",
+    "address": "示例城市 · 示例小区 · 示例户型（非真实地址）",
+    "code": "DEMO-PROJECT-001",
+    "date": "2026-10-15",
+    "version": "V1 · 模拟试排",
+    "designer": "示例设计师",
+    "scope": "版式测试：开关、窗帘、全屋网络与控制设备示例，不代表本次客户的设备范围。"
+  },
+  "floors": [
+    {
+      "id": "DEMO-FLOOR-1",
+      "name": "一层（示例）",
+      "imageSlot": "floorplan.demo.level-1",
+      "caption": "模拟点位图图片占位 · 一图一页"
+    },
+    {
+      "id": "DEMO-FLOOR-2",
+      "name": "二层（示例）",
+      "imageSlot": "floorplan.demo.level-2",
+      "caption": "模拟点位图图片占位 · 一图一页"
+    }
+  ],
+  "scenes": [
+    {
+      "id": "DEMO-SCENE-1",
+      "name": "回家场景（示例）",
+      "room": "玄关 / 客餐厅",
+      "trigger": "示例：按下玄关场景按键",
+      "actions": [
+        "开启玄关及客厅部分灯光（示例）",
+        "窗帘动作由客户确认后再设定"
+      ],
+      "pointCodes": [
+        "DEMO-P01",
+        "DEMO-P02",
+        "DEMO-P05"
+      ],
+      "status": "待确认"
+    },
+    {
+      "id": "DEMO-SCENE-2",
+      "name": "就餐场景（示例）",
+      "room": "餐厅",
+      "trigger": "示例：按下就餐场景按键",
+      "actions": [
+        "开启餐厅灯光（示例）",
+        "客厅灯光保留由客户确认的亮灯范围"
+      ],
+      "pointCodes": [
+        "DEMO-P02",
+        "DEMO-P03"
+      ],
+      "status": "待确认"
+    },
+    {
+      "id": "DEMO-SCENE-3",
+      "name": "就寝场景（示例）",
+      "room": "主卧",
+      "trigger": "示例：按下主卧床头场景按键",
+      "actions": [
+        "关闭指定主卧灯组（示例）",
+        "关闭主卧窗帘（示例，实际动作待确认）"
+      ],
+      "pointCodes": [
+        "DEMO-P03",
+        "DEMO-P05",
+        "DEMO-P11"
+      ],
+      "status": "待确认"
+    },
+    {
+      "id": "DEMO-SCENE-4",
+      "name": "离家场景（示例）",
+      "room": "全屋",
+      "trigger": "示例：按下玄关离家按键",
+      "actions": [
+        "关闭已确认纳入场景的灯光（示例）",
+        "网络设备持续运行；实际联动范围待确认"
+      ],
+      "pointCodes": [
+        "DEMO-P01",
+        "DEMO-P02",
+        "DEMO-P03",
+        "DEMO-P04"
+      ],
+      "status": "待确认"
+    }
+  ],
+  "quote": {
+    "number": "DEMO-Q-20261015-001",
+    "currency": "CNY",
+    "validityDays": 7,
+    "status": "模拟试排，不可下单",
+    "items": [
+      {
+        "id": "DEMO-ITEM-001",
+        "category": "单开",
+        "name": "单开智能开关（示例）",
+        "sku": "DEMO-001",
+        "room": "客厅入口",
+        "quantity": 2,
+        "unit": "个",
+        "unitPrice": "128.50",
+        "lineTotal": "257.00",
+        "imageSlot": "product.demo.switch-1",
+        "pointCodes": [
+          "DEMO-P01"
+        ],
+        "selectionStatus": "demo-only"
+      },
+      {
+        "id": "DEMO-ITEM-002",
+        "category": "双开",
+        "name": "双开智能开关（示例）",
+        "sku": "DEMO-002",
+        "room": "餐厅 / 过道",
+        "quantity": 3,
+        "unit": "个",
+        "unitPrice": "168.00",
+        "lineTotal": "504.00",
+        "imageSlot": "product.demo.switch-2",
+        "pointCodes": [
+          "DEMO-P02"
+        ],
+        "selectionStatus": "demo-only"
+      },
+      {
+        "id": "DEMO-ITEM-003",
+        "category": "三开",
+        "name": "三开智能开关（示例）",
+        "sku": "DEMO-003",
+        "room": "客厅 / 主卧",
+        "quantity": 4,
+        "unit": "个",
+        "unitPrice": "198.00",
+        "lineTotal": "792.00",
+        "imageSlot": "product.demo.switch-3",
+        "pointCodes": [
+          "DEMO-P03"
+        ],
+        "selectionStatus": "demo-only"
+      },
+      {
+        "id": "DEMO-ITEM-004",
+        "category": "四开",
+        "name": "四开智能开关（示例）",
+        "sku": "DEMO-004",
+        "room": "玄关 / 多功能室",
+        "quantity": 2,
+        "unit": "个",
+        "unitPrice": "228.50",
+        "lineTotal": "457.00",
+        "imageSlot": "product.demo.switch-4",
+        "pointCodes": [
+          "DEMO-P04"
+        ],
+        "selectionStatus": "demo-only"
+      },
+      {
+        "id": "DEMO-ITEM-005",
+        "category": "场景面板",
+        "name": "四键场景面板（示例，按键功能待确认）",
+        "sku": "DEMO-005",
+        "room": "主卧床头 / 次卧入口",
+        "quantity": 2,
+        "unit": "个",
+        "unitPrice": "259.00",
+        "lineTotal": "518.00",
+        "imageSlot": "product.demo.scene-panel",
+        "pointCodes": [
+          "DEMO-P05"
+        ],
+        "selectionStatus": "demo-only"
+      },
+      {
+        "id": "DEMO-ITEM-006",
+        "category": "四寸屏",
+        "name": "四寸智能中控屏及嵌入式安装配件组合（示例，具体供货范围需在选型后确认）",
+        "sku": "DEMO-006",
+        "room": "一层客餐厅与开放式厨房之间的过道入口",
+        "quantity": 1,
+        "unit": "套",
+        "unitPrice": "799.00",
+        "lineTotal": "799.00",
+        "imageSlot": "product.demo.screen-4",
+        "pointCodes": [
+          "DEMO-P06"
+        ],
+        "selectionStatus": "demo-only"
+      },
+      {
+        "id": "DEMO-ITEM-007",
+        "category": "中控大屏",
+        "name": "中控大屏（示例，规格待选）",
+        "sku": "DEMO-007",
+        "room": "书房入口",
+        "quantity": 1,
+        "unit": "个",
+        "unitPrice": "1899.00",
+        "lineTotal": "1899.00",
+        "imageSlot": "product.demo.screen-large",
+        "pointCodes": [
+          "DEMO-P07"
+        ],
+        "selectionStatus": "demo-only"
+      },
+      {
+        "id": "DEMO-ITEM-008",
+        "category": "中枢网关",
+        "name": "中枢网关（示例）",
+        "sku": "DEMO-008",
+        "room": "弱电设备柜",
+        "quantity": 1,
+        "unit": "个",
+        "unitPrice": "399.00",
+        "lineTotal": "399.00",
+        "imageSlot": "product.demo.hub",
+        "pointCodes": [
+          "DEMO-P08"
+        ],
+        "selectionStatus": "demo-only"
+      },
+      {
+        "id": "DEMO-ITEM-009",
+        "category": "窗帘电机",
+        "name": "窗帘电机（示例）",
+        "sku": "DEMO-009",
+        "room": "客厅落地窗",
+        "quantity": 2,
+        "unit": "个",
+        "unitPrice": "489.00",
+        "lineTotal": "978.00",
+        "imageSlot": "product.demo.curtain-motor-1",
+        "pointCodes": [
+          "DEMO-P09"
+        ],
+        "selectionStatus": "demo-only"
+      },
+      {
+        "id": "DEMO-ITEM-010",
+        "category": "窗帘轨道",
+        "name": "电动窗帘直轨及标准连接件（示例，长度按模拟尺寸试排，最终按实测展开）",
+        "sku": "DEMO-010",
+        "room": "客餐厅南侧落地窗与阳台推拉门相邻区域",
+        "quantity": 3.6,
+        "unit": "米",
+        "unitPrice": "88.50",
+        "lineTotal": "318.60",
+        "imageSlot": "product.demo.curtain-track-1",
+        "pointCodes": [
+          "DEMO-P10"
+        ],
+        "selectionStatus": "demo-only"
+      },
+      {
+        "id": "DEMO-ITEM-011",
+        "category": "窗帘电机",
+        "name": "窗帘电机（示例）",
+        "sku": "DEMO-011",
+        "room": "主卧飘窗",
+        "quantity": 1,
+        "unit": "个",
+        "unitPrice": "489.00",
+        "lineTotal": "489.00",
+        "imageSlot": "product.demo.curtain-motor-2",
+        "pointCodes": [
+          "DEMO-P11"
+        ],
+        "selectionStatus": "demo-only"
+      },
+      {
+        "id": "DEMO-ITEM-012",
+        "category": "窗帘轨道",
+        "name": "电动窗帘轨道（示例）",
+        "sku": "DEMO-012",
+        "room": "主卧窗边",
+        "quantity": 2.85,
+        "unit": "米",
+        "unitPrice": "88.50",
+        "lineTotal": "252.23",
+        "imageSlot": "product.demo.curtain-track-2",
+        "pointCodes": [
+          "DEMO-P12"
+        ],
+        "selectionStatus": "demo-only"
+      },
+      {
+        "id": "DEMO-ITEM-013",
+        "category": "AP",
+        "name": "吸顶无线接入点（示例）",
+        "sku": "DEMO-013",
+        "room": "客厅中央",
+        "quantity": 1,
+        "unit": "个",
+        "unitPrice": "599.00",
+        "lineTotal": "599.00",
+        "imageSlot": "product.demo.ap-1",
+        "pointCodes": [
+          "DEMO-P13"
+        ],
+        "selectionStatus": "demo-only"
+      },
+      {
+        "id": "DEMO-ITEM-014",
+        "category": "AP",
+        "name": "面板无线接入点（示例）",
+        "sku": "DEMO-014",
+        "room": "书房 / 次卧",
+        "quantity": 2,
+        "unit": "个",
+        "unitPrice": "459.00",
+        "lineTotal": "918.00",
+        "imageSlot": "product.demo.ap-2",
+        "pointCodes": [
+          "DEMO-P14"
+        ],
+        "selectionStatus": "demo-only"
+      },
+      {
+        "id": "DEMO-ITEM-015",
+        "category": "AC",
+        "name": "无线网络控制器（示例）",
+        "sku": "DEMO-015",
+        "room": "弱电设备柜",
+        "quantity": 1,
+        "unit": "个",
+        "unitPrice": "699.00",
+        "lineTotal": "699.00",
+        "imageSlot": "product.demo.ac",
+        "pointCodes": [
+          "DEMO-P15"
+        ],
+        "selectionStatus": "demo-only"
+      },
+      {
+        "id": "DEMO-ITEM-016",
+        "category": "PoE交换机",
+        "name": "PoE交换机（示例，端口及供电预算待核）",
+        "sku": "DEMO-016",
+        "room": "弱电设备柜",
+        "quantity": 1,
+        "unit": "个",
+        "unitPrice": "799.00",
+        "lineTotal": "799.00",
+        "imageSlot": "product.demo.poe",
+        "pointCodes": [
+          "DEMO-P16"
+        ],
+        "selectionStatus": "demo-only"
+      },
+      {
+        "id": "DEMO-ITEM-017",
+        "category": "网络配套",
+        "name": "网络跳线（示例）",
+        "sku": "DEMO-017",
+        "room": "弱电设备柜",
+        "quantity": 6,
+        "unit": "条",
+        "unitPrice": "18.80",
+        "lineTotal": "112.80",
+        "imageSlot": "product.demo.patch-cord",
+        "pointCodes": [
+          "DEMO-P17"
+        ],
+        "selectionStatus": "demo-only"
+      },
+      {
+        "id": "DEMO-ITEM-018",
+        "category": "安装配套",
+        "name": "面板安装盒（示例）",
+        "sku": "DEMO-018",
+        "room": "客厅 / 餐厅 / 三间卧室",
+        "quantity": 8,
+        "unit": "个",
+        "unitPrice": "12.50",
+        "lineTotal": "100.00",
+        "imageSlot": "product.demo.wall-box",
+        "pointCodes": [
+          "DEMO-P18"
+        ],
+        "selectionStatus": "demo-only"
+      },
+      {
+        "id": "DEMO-ITEM-019",
+        "category": "窗帘配套",
+        "name": "轨道转接与固定配件（示例）",
+        "sku": "DEMO-019",
+        "room": "客厅 / 主卧",
+        "quantity": 2,
+        "unit": "套",
+        "unitPrice": "65.00",
+        "lineTotal": "130.00",
+        "imageSlot": "product.demo.connector",
+        "pointCodes": [
+          "DEMO-P19"
+        ],
+        "selectionStatus": "demo-only"
+      },
+      {
+        "id": "DEMO-ITEM-020",
+        "category": "安装配套",
+        "name": "预留位空白面板（示例）",
+        "sku": "DEMO-020",
+        "room": "过道预留位",
+        "quantity": 3,
+        "unit": "个",
+        "unitPrice": "9.90",
+        "lineTotal": "29.70",
+        "imageSlot": "product.demo.blank-panel",
+        "pointCodes": [
+          "DEMO-P20"
+        ],
+        "selectionStatus": "demo-only"
+      }
+    ],
+    "subtotal": "11050.33",
+    "installationFee": "1150.00",
+    "discount": "300.00",
+    "total": "11900.33",
+    "amountDue": "11900.33",
+    "taxNote": "样稿未独立计算税额；真实项目按已保存报价及明确的费用口径输出。",
+    "terms": [
+      "所有商品、数量、单价、房间和费用均为合成数据，仅用于版式测试。",
+      "真实报价仅使用工作台已保存且核验通过的选型与金额，不从模板读取价格。",
+      "窗帘轨道长度用于测试小数排版，不是施工尺寸；真实项目需实测并确认配套范围。",
+      "本样稿不作设备兼容性、供货、工期或安装条件承诺。"
+    ]
+  },
+  "calculation": {
+    "quantityEncoding": "JSON number; compute with Decimal(str(quantity))",
+    "moneyEncoding": "decimal string, two fraction digits",
+    "rounding": "ROUND_HALF_UP per line to 0.01 CNY",
+    "subtotalRule": "sum(items[].lineTotal)",
+    "totalRule": "subtotal + installationFee - discount",
+    "rows": 20,
+    "expectedQuoteDetailPages": 3,
+    "rowsPerPage": 7,
+    "lastPageRows": 6
+  },
+  "assetPolicy": {
+    "allImagesSynthetic": true,
+    "productImages": "Use generated neutral demonstration placeholders; do not fetch manufacturer images for this sample.",
+    "floorplanImages": "Use a synthetic diagram; do not use any customer CAD or point-map image.",
+    "slotsAreIdentifiers": true
+  }
+}

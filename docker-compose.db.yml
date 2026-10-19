@@ -1,0 +1,44 @@
+# 本地开发数据库（Postgres）。仅用于本机开发，不参与生产部署。
+#
+# 启动：  docker compose -f docker-compose.db.yml up -d
+# 停止：  docker compose -f docker-compose.db.yml stop
+# 销毁：  docker compose -f docker-compose.db.yml down          （保留数据卷）
+# 重置：  docker compose -f docker-compose.db.yml down -v       （删除数据卷）
+# 建表：  pnpm db:migrate
+# 自检：  pnpm db:check
+#
+# 连接串（写进 .env.local）：
+#   postgresql://postgres:postgres@127.0.0.1:15432/fmkj
+
+# 仓库目录名含中文，Compose 无法自动推导项目名，需显式指定
+name: fmkj-v3-db
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: fmkj-v3-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-fmkj}
+      # 与原 Neon 环境保持一致的时区口径
+      TZ: Asia/Shanghai
+      PGTZ: Asia/Shanghai
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-15432}:5432"
+    volumes:
+      - fmkj-v3-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-fmkj}
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  fmkj-v3-db-data:
+    name: fmkj-v3-db-data

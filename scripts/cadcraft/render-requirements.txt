@@ -1,0 +1,3 @@
+# Local deterministic XCLIP renderer. Install once; exports run offline.
+ezdxf==1.4.4
+PyMuPDF==1.26.7

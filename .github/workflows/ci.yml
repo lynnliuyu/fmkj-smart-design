@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      # The point icon assets are generated from lib/point-device-symbols.mjs.
+      # A drift here means the shipped SVG no longer matches the shared geometry.
+      - name: Check generated icon assets
+        run: |
+          pnpm icons:build
+          git diff --exit-code -- public/assets/point-icons
+
+      # Typecheck and unit tests do not exercise the Server/Client boundary, the
+      # route manifest or missing environment variables. Only a real build does.
+      - name: Build
+        run: pnpm build

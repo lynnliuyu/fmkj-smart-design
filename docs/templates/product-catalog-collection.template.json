@@ -1,0 +1,78 @@
+{
+  "format": "fmkj-product-catalog-collection",
+  "version": 1,
+  "notice": "仅为采集底稿；不是批量导入格式。替换占位内容，确认供货身份和来源后，通过文档所列后台/API逐条写入。",
+  "batchId": "REPLACE_WITH_BATCH_ID",
+  "collectedAt": null,
+  "targetEnvironment": {
+    "baseUrl": "http://localhost:3000",
+    "databaseHost": "127.0.0.1",
+    "databasePort": 15432,
+    "databaseName": "fmkj",
+    "checkedAt": null
+  },
+  "records": [
+    {
+      "action": "collect-only",
+      "applyReady": false,
+      "existingProductId": null,
+      "expectedMappingRevision": null,
+      "deduplication": {
+        "checkedAt": null,
+        "matchedProductIds": [],
+        "decision": null,
+        "reason": null
+      },
+      "product": {
+        "name": "REPLACE_WITH_VERIFIED_SUPPLY_NAME",
+        "sku": "REPLACE_WITH_UNIQUE_INTERNAL_SKU",
+        "brand": null,
+        "platform": null,
+        "category": "开关",
+        "unit": "个",
+        "price": 0,
+        "cost": 0,
+        "stock": 0,
+        "image": null,
+        "description": null,
+        "tags": [],
+        "channels": [],
+        "status": "pending_review",
+        "catalogKind": "sku",
+        "deviceTypeId": "wall-switch",
+        "parentProductId": null,
+        "manufacturerModel": null,
+        "specs": {},
+        "protocols": [],
+        "capabilities": [],
+        "selectionStatus": "pending",
+        "selectionEvidence": "",
+        "pricingStatus": "pending",
+        "pricingEvidence": "售价与成本未知，0仅为系统占位，不表示免费或零成本。"
+      },
+      "sources": [],
+      "sourceEntryTemplate": {
+        "sourceId": "S1",
+        "kind": "manufacturer-manual",
+        "title": null,
+        "url": null,
+        "localPath": null,
+        "documentVersion": null,
+        "collectedAt": null,
+        "applicableModelAndVariant": null,
+        "pageOrSection": null,
+        "observations": []
+      },
+      "fieldEvidence": {},
+      "priceQuotes": [],
+      "missing": [
+        "具体供货身份与厂家型号待确认；确认后才能使用catalogKind=sku",
+        "按实际设备类型收集必需参数及协议，不照抄示例类型",
+        "参数来源与价格来源待补；保持pending"
+      ],
+      "conflicts": [],
+      "before": null,
+      "writeResult": null
+    }
+  ]
+}
