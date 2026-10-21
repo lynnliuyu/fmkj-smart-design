@@ -183,7 +183,7 @@ function environmentKeyLabel(key: string) {
     DATABASE_URL: "数据库连接地址",
     DEV_AUTH_TOKEN: "开发登录令牌",
     FMKJ_API_BASE_URL: "外部产品接口地址",
-    AUTH_SECRET: "登录会话签名密钥",
+    JWT_SECRET: "登录会话签名密钥",
   }
 
   return labels[key] ?? "自定义环境变量"

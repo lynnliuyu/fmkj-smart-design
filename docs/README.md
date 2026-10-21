@@ -5,7 +5,7 @@
 1. `core-business-flow.md`
    - 核心业务主流程
    - 项目详情工作台规划
-   - 报价、合同、工单、交付、售后关系
+   - 报价、合同、交付关系
    - 主导航收口规则
 
 2. `account-tier-and-upgrade-plan.md`
@@ -49,6 +49,12 @@
 
 ## 当前状态
 
+中文可视化见 [系统架构图](architecture/system-map.html)：包含当前实现、目标双部署、业务流程和待建设差异；模块与代码证据见 [架构清单](architecture/system-map.registry.json)，维护说明见 [架构图说明](architecture/README.md)。
+
+可编辑细化版见 [system-map.drawio](architecture/system-map.drawio)，现包含 13 页（总关系图 + 12 张分图）；上传图纸与户型图产物的设计记录见 [上传图纸与户型图产物](upload-floorplan-and-marker-outputs.md)（其中对接外部 CAD 服务、带点位标记、自动布点/自动报价为规划）；转换前的架构文档保存在 [system-map-components.drawio](architecture/system-map-components.drawio)。编辑与保存用 Docker 运行（`docker compose -f docker/architecture-editor/docker-compose.yml up -d --build`，入口 `http://127.0.0.1:8767/`，可复用到其他项目），部署见 [流程图编辑器 Docker 部署](architecture-editor-docker.md)，Agent 读图与协作方式见 [流程图 ↔ Agent 协作](architecture-agent-collaboration.md)，操作说明见 [架构图说明](architecture/README.md#可编辑细化版)。
+
+双部署与可选官方产品库的方向见 [ADR 0010](adr/0010-hosted-local-deployment-and-optional-catalog.md)，设计见 [线上托管、本地设备与官方产品库架构](deployment-and-catalog-architecture.md)，实施顺序见 [Plan 028](../plans/028-hosted-local-and-catalog-foundation.md)。当前只完成架构记录，不能据此声称线上版已开放、设备可发货或已具备授权同步/一键升级。
+
 账号体系 M6 主干已经收口，详情见 `account-system-m6-status.md`。
 
 工作流梳理与精简的范围、结果和验收证据见 [Plan 021](../plans/021-workbench-workflow-consolidation.md)。已确定的报价规则见 [ADR 0006](adr/0006-project-quotation-defaults-and-linked-deletion.md)，固定版本客户出口及编辑职责见 [ADR 0007](adr/0007-fixed-delivery-outputs-and-editor-responsibilities.md)。领域规则仍以 `CONTEXT.md` 和相关 ADR 为准。
@@ -80,3 +86,7 @@ pnpm db:smoke
 - [ADR 0007](adr/0007-fixed-delivery-outputs-and-editor-responsibilities.md)：三段工作台入口、保存确认、草稿检查与固定版本出口。
 
 本机图片存储、布局 / 灯光 / 开关图切换及配准规则见 [ADR 0009](adr/0009-local-image-storage-and-reference-drawings.md) 与 [Plan 027](../plans/027-local-image-storage-and-reference-drawings.md)；实际操作见 [点位设计工作流](point-map-design-workflow.md)。
+
+## CAD 导出
+
+- [CAD 图纸导出接口：服务器 Docker 部署](cad-export-docker.md)：镜像、compose、离线依赖、运维与交付边界。

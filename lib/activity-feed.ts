@@ -6,6 +6,7 @@ import {
   FolderKanban,
   Hammer,
   MapPinned,
+  Package,
   type LucideIcon,
 } from "lucide-react"
 
@@ -13,11 +14,21 @@ export type ActivityKind =
   | "project-created"
   | "project-advanced"
   | "quote-generated"
-  | "work-order-created"
-  | "work-order-completed"
   | "risk"
+  /** 产品目录维护（如商品展示图更新），不属于项目推进动态。 */
+  | "catalog"
+  /** 未识别的历史动作；按通用动态展示，不假装成某类业务。 */
+  | "other"
 
-export type ActivityIconKey = "alert" | "check" | "clock" | "hammer" | "map" | "project" | "quote"
+export type ActivityIconKey =
+  | "alert"
+  | "catalog"
+  | "check"
+  | "clock"
+  | "hammer"
+  | "map"
+  | "project"
+  | "quote"
 
 export type ActivityFeedItem = {
   actor: string
@@ -51,8 +62,6 @@ export type ActivityLogAction =
   | "project.risk_toggled"
   | "quote.created"
   | "quote.updated"
-  | "work_order.created"
-  | "work_order.completed"
 
 export type ActivityLogRow = {
   action: ActivityLogAction | string
@@ -69,6 +78,7 @@ export type ActivityLogRow = {
 
 export const activityIconMap: Record<ActivityIconKey, LucideIcon> = {
   alert: AlertTriangle,
+  catalog: Package,
   check: CheckCircle2,
   clock: Clock3,
   hammer: Hammer,
@@ -146,18 +156,19 @@ export function activityActionPresentation(action: string, risk = "") {
     }
   }
 
-  if (action === "work_order.completed") {
+  if (action === "product.visual_updated" || action.startsWith("product.")) {
     return {
-      iconKey: "check" as const,
-      kind: "work-order-completed" as const,
-      tone: "text-emerald-700 bg-emerald-50 border-emerald-200",
+      iconKey: "catalog" as const,
+      kind: "catalog" as const,
+      tone: "text-slate-700 bg-slate-50 border-slate-200",
     }
   }
 
+  // 未知动作（含历史遗留行）按通用动态展示，不再假装成某类业务。
   return {
     iconKey: "hammer" as const,
-    kind: "work-order-created" as const,
-    tone: "text-violet-700 bg-violet-50 border-violet-200",
+    kind: "other" as const,
+    tone: "text-slate-700 bg-slate-50 border-slate-200",
   }
 }
 
@@ -201,8 +212,7 @@ function defaultTitle(action: string, entityLabel: string) {
   if (action === "project.stage_advanced") return `${label} 阶段已推进`
   if (action === "project.risk_toggled") return `${label} 风险状态已更新`
   if (action === "quote.created" || action === "quote.updated") return `${label} 报价已更新`
-  if (action === "work_order.completed") return `${label} 工单已完成`
-  return `${label} 工单已创建`
+  return `${label} 已更新`
 }
 
 function defaultDescription(action: string, entityLabel: string) {
@@ -211,8 +221,7 @@ function defaultDescription(action: string, entityLabel: string) {
   if (action === "project.stage_advanced") return `${label} 已推进到新的项目阶段。`
   if (action === "project.risk_toggled") return `${label} 的风险状态发生变化，请及时确认。`
   if (action === "quote.created" || action === "quote.updated") return `${label} 的报价已更新。`
-  if (action === "work_order.completed") return `${label} 的工单已完成，等待交付资料和验收确认。`
-  return `${label} 已创建工单，等待安排处理。`
+  return `${label} 有新的业务动态。`
 }
 
 function cleanText(value: string | null | undefined) {

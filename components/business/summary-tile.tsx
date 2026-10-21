@@ -45,3 +45,30 @@ export function SummaryField({
     </div>
   )
 }
+
+/** 列表页顶部的一行紧凑统计，替代四张独立卡片。 */
+export function StatStrip({
+  className,
+  items,
+}: {
+  className?: string
+  items: Array<{ label: string; value: React.ReactNode; tone?: "default" | "warn" }>
+}) {
+  return (
+    <div className={cn("flex flex-wrap items-center gap-x-5 gap-y-1 text-sm", className)}>
+      {items.map((item) => (
+        <span key={item.label} className="text-muted-foreground">
+          {item.label}{" "}
+          <span
+            className={cn(
+              "font-semibold tabular-nums text-foreground",
+              item.tone === "warn" && "text-destructive"
+            )}
+          >
+            {item.value}
+          </span>
+        </span>
+      ))}
+    </div>
+  )
+}

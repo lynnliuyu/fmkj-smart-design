@@ -2,85 +2,85 @@
   {
     "name": "Matter",
     "file": "/assets/protocols/matter.svg",
-    "sourceUrl": "local-text-badge",
-    "sourceName": "Neutral text badge",
-    "usageNote": "Plain descriptive text only; names remain trademarks of their respective owners. Original artwork is excluded from this candidate."
+    "sourceUrl": "https://icon-sets.iconify.design/logos/matter/",
+    "sourceName": "Iconify SVG Logos",
+    "usageNote": "Open icon source used as local asset. Logo remains a trademark of its owner."
   },
   {
     "name": "Zigbee",
     "file": "/assets/protocols/zigbee.svg",
-    "sourceUrl": "local-text-badge",
-    "sourceName": "Neutral text badge",
-    "usageNote": "Plain descriptive text only; names remain trademarks of their respective owners. Original artwork is excluded from this candidate."
+    "sourceUrl": "https://icon-sets.iconify.design/logos/zigbee/",
+    "sourceName": "Iconify SVG Logos",
+    "usageNote": "Open icon source used as local asset. Logo remains a trademark of its owner."
   },
   {
     "name": "Thread",
     "file": "/assets/protocols/thread.svg",
-    "sourceUrl": "local-text-badge",
-    "sourceName": "Neutral text badge",
-    "usageNote": "Plain descriptive text only; names remain trademarks of their respective owners. Original artwork is excluded from this candidate."
+    "sourceUrl": "local-fallback",
+    "sourceName": "FMKJ local text badge",
+    "usageNote": "Text badge fallback because a clearly safe official protocol logo source was not confirmed."
   },
   {
     "name": "Wi-Fi",
     "file": "/assets/protocols/wifi.svg",
-    "sourceUrl": "local-text-badge",
-    "sourceName": "Neutral text badge",
-    "usageNote": "Plain descriptive text only; names remain trademarks of their respective owners. Original artwork is excluded from this candidate."
+    "sourceUrl": "https://icon-sets.iconify.design/logos/wifi/",
+    "sourceName": "Iconify SVG Logos",
+    "usageNote": "Open icon source used as local asset. Logo remains a trademark of its owner."
   },
   {
     "name": "Bluetooth",
     "file": "/assets/protocols/bluetooth.svg",
-    "sourceUrl": "local-text-badge",
-    "sourceName": "Neutral text badge",
-    "usageNote": "Plain descriptive text only; names remain trademarks of their respective owners. Original artwork is excluded from this candidate."
+    "sourceUrl": "https://icon-sets.iconify.design/logos/bluetooth/",
+    "sourceName": "Iconify SVG Logos",
+    "usageNote": "Open icon source used as local asset. Logo remains a trademark of its owner."
   },
   {
     "name": "Apple Home",
     "file": "/assets/protocols/apple-home.svg",
-    "sourceUrl": "local-text-badge",
-    "sourceName": "Neutral text badge",
-    "usageNote": "Plain descriptive text only; names remain trademarks of their respective owners. Original artwork is excluded from this candidate."
+    "sourceUrl": "https://icon-sets.iconify.design/selfhst/apple-homekit/",
+    "sourceName": "Iconify selfh.st/icons",
+    "usageNote": "Open icon source used as local asset with attribution retained in this manifest."
   },
   {
     "name": "KNX",
     "file": "/assets/protocols/knx.svg",
-    "sourceUrl": "local-text-badge",
-    "sourceName": "Neutral text badge",
-    "usageNote": "Plain descriptive text only; names remain trademarks of their respective owners. Original artwork is excluded from this candidate."
+    "sourceUrl": "local-fallback",
+    "sourceName": "FMKJ local text badge",
+    "usageNote": "Text badge fallback because available logo source had unsuitable licensing for this product."
   },
   {
     "name": "DALI",
     "file": "/assets/protocols/dali.svg",
-    "sourceUrl": "local-text-badge",
-    "sourceName": "Neutral text badge",
-    "usageNote": "Plain descriptive text only; names remain trademarks of their respective owners. Original artwork is excluded from this candidate."
+    "sourceUrl": "local-fallback",
+    "sourceName": "FMKJ local text badge",
+    "usageNote": "Text badge fallback because a clearly safe official protocol logo source was not confirmed."
   },
   {
     "name": "Modbus",
     "file": "/assets/protocols/modbus.svg",
-    "sourceUrl": "local-text-badge",
-    "sourceName": "Neutral text badge",
-    "usageNote": "Plain descriptive text only; names remain trademarks of their respective owners. Original artwork is excluded from this candidate."
+    "sourceUrl": "local-fallback",
+    "sourceName": "FMKJ local text badge",
+    "usageNote": "Text badge fallback because available logo source had unsuitable licensing for this product."
   },
   {
     "name": "PoE",
     "file": "/assets/protocols/poe.svg",
-    "sourceUrl": "local-text-badge",
-    "sourceName": "Neutral text badge",
-    "usageNote": "Plain descriptive text only; names remain trademarks of their respective owners. Original artwork is excluded from this candidate."
+    "sourceUrl": "local-fallback",
+    "sourceName": "FMKJ local text badge",
+    "usageNote": "Text badge fallback because PoE is a technology label rather than a single safe brand logo."
   },
   {
     "name": "Aqara",
     "file": "/assets/protocols/aqara.svg",
-    "sourceUrl": "local-text-badge",
-    "sourceName": "Neutral text badge",
-    "usageNote": "Plain descriptive text only; names remain trademarks of their respective owners. Original artwork is excluded from this candidate."
+    "sourceUrl": "local-fallback",
+    "sourceName": "FMKJ local text badge",
+    "usageNote": "Text badge fallback because available logo source had unsuitable licensing for this product."
   },
   {
     "name": "Xiaomi Home",
     "file": "/assets/protocols/xiaomi-home.svg",
-    "sourceUrl": "local-text-badge",
-    "sourceName": "Neutral text badge",
-    "usageNote": "Plain descriptive text only; names remain trademarks of their respective owners. Original artwork is excluded from this candidate."
+    "sourceUrl": "https://icon-sets.iconify.design/simple-icons/xiaomi/",
+    "sourceName": "Iconify Simple Icons",
+    "usageNote": "Simple Icons source is CC0; Xiaomi mark remains a trademark of its owner."
   }
 ]

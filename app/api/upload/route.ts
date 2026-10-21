@@ -1,5 +1,6 @@
-import { put } from "@vercel/blob"
 import { NextRequest, NextResponse } from "next/server"
+
+import { fileStorage } from "@/lib/file-storage"
 
 const folderByKind: Record<string, string> = {
   avatar: "avatars",
@@ -48,10 +49,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 })
     }
 
-    if (!process.env.BLOB_READ_WRITE_TOKEN) {
-      return NextResponse.json({ error: "BLOB_STORE_NOT_CONFIGURED" }, { status: 500 })
-    }
-
     const formData = await request.formData()
     const file = formData.get("file")
     const kind = clean(formData.get("kind")) || "attachment"
@@ -78,22 +75,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const folder = folderByKind[kind] ?? "attachments"
-    const pathname = `${folder}/${entityId}/${Date.now()}-${slugFileName(file.name)}`
-    const blob = await put(pathname, file, {
-      access: "public",
-      addRandomSuffix: false,
+    const stored = await fileStorage().save({
+      kind: folderByKind[kind] ?? "attachments",
+      ownerId: entityId,
+      filename: file.name,
+      bytes: new Uint8Array(await file.arrayBuffer()),
+      contentType,
     })
 
     return NextResponse.json({
       data: {
         contentType,
-        downloadUrl: blob.downloadUrl,
+        downloadUrl: stored.downloadUrl,
         fileName: file.name,
         kind,
-        pathname: blob.pathname,
-        size: file.size,
-        url: blob.url,
+        pathname: stored.pathname,
+        size: stored.size,
+        url: stored.url,
       },
     })
   } catch (error) {
@@ -108,16 +106,3 @@ function clean(value: FormDataEntryValue | null) {
   return String(value ?? "").trim()
 }
 
-function slugFileName(fileName: string) {
-  const extension = fileName.includes(".") ? `.${fileName.split(".").pop()}` : ""
-  const baseName = fileName.replace(/\.[^.]+$/, "")
-  const safeBaseName =
-    baseName
-      .normalize("NFKD")
-      .replace(/[^\w.-]+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "")
-      .toLowerCase() || "file"
-
-  return `${safeBaseName}${extension.toLowerCase()}`
-}

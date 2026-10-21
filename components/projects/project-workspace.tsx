@@ -2,44 +2,59 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
-  CalendarClock,
+  Check,
   CheckCircle2,
-  ClipboardCheck,
-  FileCheck2,
   FileText,
-  Headset,
-  Home,
+  FolderKanban,
   Images,
   Loader2,
   MapPinned,
   MoreHorizontal,
-  Phone,
+  Pencil,
   Save,
-  ShieldAlert,
   ShieldCheck,
   Sparkles,
   UserRound,
   Users,
 } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import { toast } from "sonner"
 
-import { SummaryTile } from "@/components/business/summary-tile"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import type { ProjectAccessPayload } from "@/lib/project-member-access-service"
+import {
+  WORKBENCH_BASIC_TAB,
+  legacyWorkspaceTabHref,
+  normalizeWorkspaceTab,
+  pageOwnedWorkspaceTabs,
+  type WorkbenchWorkspaceTab,
+} from "@/lib/workbench-nav"
 import { updateProjectDetailsClient } from "@/lib/project-workflow-client"
 import type { ProjectWaitingOn } from "@/lib/project-workbench"
-import { ProjectSitePhotosPanel } from "@/components/projects/project-site-photos"
 import { ProjectSavedDesignSummary } from "@/components/projects/project-saved-design-summary"
 import { QuickQuoteDialog } from "@/components/quotes/quick-quote-dialog"
 
@@ -100,32 +115,33 @@ const stageLabels: Record<string, string> = {
   proposal: "方案报价",
 }
 
-const workspaceTabs = [
-  { value: "basic", label: "资料", icon: UserRound },
-  { value: "solution-quote", label: "方案报价", icon: MapPinned },
-  { value: "contract", label: "合同", icon: FileCheck2 },
-  { value: "work-orders", label: "工单", icon: ClipboardCheck },
-  { value: "delivery", label: "交付", icon: CheckCircle2 },
-  { value: "aftercare", label: "售后", icon: Headset },
-  { value: "members", label: "成员", icon: Users },
-  { value: "site-photos", label: "现场图片", icon: Images },
+/** 段落取值到图标的映射；取值与文案由 workbench-nav 统一维护。 */
+const workspaceTabIcons: Record<WorkbenchWorkspaceTab, LucideIcon> = {
+  "basic": UserRound,
+  "solution-quote": MapPinned,
+  "members": Users,
+}
+
+/** 执行类业务不再占用项目内段落，直接在「执行与资料」里跳到各自的页面。 */
+const stageLinks: Array<{ label: string; icon: LucideIcon; href: (projectId: string) => string }> = [
+  { label: "客户交付", icon: CheckCircle2, href: (projectId) => `/projects/${encodeURIComponent(projectId)}/presentation` },
 ]
 
-const workspaceTabValues = new Set(workspaceTabs.map((tab) => tab.value))
-
-function normalizeWorkspaceTab(value: string | null) {
-  if (value === "workOrder" || value === "work-orders") return "work-orders"
-  if (value === "point-map" || value === "quote") return "solution-quote"
-  if (value && workspaceTabValues.has(value)) return value
-  return "basic"
-}
+/**
+ * 顶部栏已经承担「项目（资料）/ 方案报价」两个主入口，
+ * 页内只保留「执行与资料」里按需打开的次要段落，避免两套重复入口。
+ */
+const secondaryTabs = pageOwnedWorkspaceTabs()
 
 export function ProjectWorkspace({ projectId }: { projectId: string }) {
   const searchParams = useSearchParams()
-  const initialTab = normalizeWorkspaceTab(searchParams.get("tab"))
-  const [tabSelection, setTabSelection] = React.useState({ routeTab: initialTab, value: initialTab })
-  const activeTab = tabSelection.routeTab === initialTab ? tabSelection.value : initialTab
-  const secondaryTab = workspaceTabs.find((tab) => tab.value === activeTab && !["basic", "solution-quote"].includes(tab.value))
+  const pathname = usePathname()
+  const router = useRouter()
+  const requestedTab = searchParams.get("tab")
+  const routeTab = normalizeWorkspaceTab(requestedTab)
+  const [tabSelection, setTabSelection] = React.useState({ routeTab, value: routeTab })
+  const activeTab = tabSelection.routeTab === routeTab ? tabSelection.value : routeTab
+  const activeSecondaryTab = secondaryTabs.find((tab) => tab.value === activeTab)
   const [project, setProject] = React.useState<Project | null>(null)
   const [options, setOptions] = React.useState<ProjectOptions>({})
   const [isLoading, setIsLoading] = React.useState(true)
@@ -167,6 +183,22 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
     }
   }, [projectId])
 
+  // 合同 / 交付不再是项目内段落：旧直达地址转到对应业务页面，避免静默变成「资料」。
+  React.useEffect(() => {
+    const legacyHref = legacyWorkspaceTabHref(requestedTab, projectId)
+    if (legacyHref) router.replace(legacyHref)
+  }, [projectId, requestedTab, router])
+
+  // 段落写回地址：刷新页面，或从顶部栏切回主入口时，仍落在同一段。
+  function selectTab(value: WorkbenchWorkspaceTab) {
+    setTabSelection({ routeTab, value })
+    const params = new URLSearchParams(searchParams.toString())
+    if (value === WORKBENCH_BASIC_TAB) params.delete("tab")
+    else params.set("tab", value)
+    const query = params.toString()
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
+  }
+
   if (isLoading) {
     return (
       <div className="flex min-h-[360px] items-center justify-center rounded-lg border border-dashed">
@@ -192,91 +224,38 @@ export function ProjectWorkspace({ projectId }: { projectId: string }) {
 
   return (
     <section className="flex flex-col gap-5">
-      <ProjectCommandCenter project={project} />
+      <ProjectOverviewCard
+        activeSecondaryTab={activeSecondaryTab?.value ?? null}
+        onSaved={(updatedProject) => setProject(updatedProject)}
+        onSelectSecondaryTab={selectTab}
+        options={options}
+        project={project}
+        showBasicDetails={activeTab === WORKBENCH_BASIC_TAB}
+      />
 
-      <Tabs value={activeTab} onValueChange={(value) => setTabSelection({ routeTab: initialTab, value })} className="gap-4">
-        <TabsList className="flex h-auto w-full flex-wrap justify-start rounded-lg">
-          {workspaceTabs.filter((tab) => ["basic", "solution-quote"].includes(tab.value)).map((tab) => {
-            const Icon = tab.icon
-
-            return (
-              <TabsTrigger key={tab.value} value={tab.value} className="h-9 flex-none rounded-md px-3">
-                <Icon className="size-4" />
-                {tab.label}
-              </TabsTrigger>
-            )
-          })}
-          {secondaryTab ? <TabsTrigger value={secondaryTab.value} className="h-9 flex-none rounded-md px-3"><secondaryTab.icon className="size-4" />{secondaryTab.label}</TabsTrigger> : null}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="ghost" className="ml-auto" aria-label="执行与项目资料">
-                <MoreHorizontal className="size-4" />执行与资料
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {workspaceTabs.filter((tab) => !["basic", "solution-quote"].includes(tab.value)).map((tab) => {
-                const Icon = tab.icon
-                return <DropdownMenuItem key={tab.value} onSelect={() => setTabSelection({ routeTab: initialTab, value: tab.value })}><Icon className="size-4" />{tab.label}</DropdownMenuItem>
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </TabsList>
-
-        <TabsContent value="basic">
-          <ProjectDetailsForm
-            options={options}
-            project={project}
-            onSaved={(updatedProject) => setProject(updatedProject)}
-          />
-        </TabsContent>
-        <TabsContent value="solution-quote">
-          <SolutionQuotePanel project={project} />
-        </TabsContent>
-        <TabsContent value="contract">
-          <StagePanel
-            title="合同"
-            primaryHref={`/contracts?projectId=${encodeURIComponent(project.id)}`}
-            primaryLabel="查看合同"
-            items={["合同正文", "报价单附件", "点位图附件", "签约状态"]}
-          />
-        </TabsContent>
-        <TabsContent value="work-orders">
-          <StagePanel
-            title="工单"
-            primaryHref={`/work-orders?projectId=${encodeURIComponent(project.id)}`}
-            primaryLabel="查看工单"
-            items={["标准工作内容", "报价产品携带", "工地实拍", "企业版工价字段"]}
-          />
-        </TabsContent>
-        <TabsContent value="delivery">
-          <StagePanel
-            title="客户交付与验收"
-            primaryHref={`/projects/${encodeURIComponent(project.id)}/presentation`}
-            primaryLabel="查看客户交付"
-            items={["产品数量确认", "安装位置确认", "联网与控制测试", "客户签字/线上确认"]}
-          />
-        </TabsContent>
-        <TabsContent value="aftercare">
-          <StagePanel
-            title="售后"
-            primaryHref={`/aftercare?projectId=${encodeURIComponent(project.id)}`}
-            primaryLabel="查看售后"
-            items={["售后问题", "处理记录", "照片附件", "项目关联"]}
-          />
-        </TabsContent>
-        <TabsContent value="members">
-          <ProjectMembersPanel projectId={project.id} />
-        </TabsContent>
-        <TabsContent value="site-photos">
-          <ProjectSitePhotosPanel projectId={project.id} />
-        </TabsContent>
-      </Tabs>
+      {activeTab === "solution-quote" ? <SolutionQuotePanel project={project} /> : null}
+      {activeTab === "members" ? <ProjectMembersPanel projectId={project.id} /> : null}
     </section>
   )
 }
 
-function ProjectCommandCenter({ project }: { project: Project }) {
+function ProjectOverviewCard({
+  activeSecondaryTab,
+  onSaved,
+  onSelectSecondaryTab,
+  options,
+  project,
+  showBasicDetails,
+}: {
+  activeSecondaryTab: WorkbenchWorkspaceTab | null
+  onSaved: (project: Project) => void
+  onSelectSecondaryTab: (value: WorkbenchWorkspaceTab) => void
+  options: ProjectOptions
+  project: Project
+  showBasicDetails: boolean
+}) {
   const risk = project.riskLevel ?? project.risk
+  const [isEditing, setIsEditing] = React.useState(false)
 
   return (
     <Card>
@@ -286,9 +265,10 @@ function ProjectCommandCenter({ project }: { project: Project }) {
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">{stageLabels[project.stage] ?? project.stage}</Badge>
               {project.stageStatusLabel ? <Badge variant="secondary">{project.stageStatusLabel}</Badge> : null}
-              <Badge variant={risk === "blocked" ? "destructive" : risk === "watch" ? "secondary" : "outline"}>
-                {riskLabel(risk)}
-              </Badge>
+              {/* 「正常」是默认值，不占位；只有需关注 / 阻塞才显示。 */}
+              {risk !== "normal" ? (
+                <Badge variant={risk === "blocked" ? "destructive" : "secondary"}>{riskLabel(risk)}</Badge>
+              ) : null}
             </div>
             <div>
               <CardTitle className="text-2xl">{project.name}</CardTitle>
@@ -302,40 +282,133 @@ function ProjectCommandCenter({ project }: { project: Project }) {
                 继续方案报价
               </Link>
             </Button>
-            <Button asChild variant="outline">
-              <Link href="/projects">返回项目列表</Link>
-            </Button>
+            {showBasicDetails ? (
+              <Button variant="outline" onClick={() => setIsEditing(true)}>
+                <Pencil className="size-4" />
+                编辑资料
+              </Button>
+            ) : null}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <MoreHorizontal className="size-4" />
+                  执行与资料
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {stageLinks.map((stage) => {
+                  const Icon = stage.icon
+
+                  return (
+                    <DropdownMenuItem key={stage.label} asChild>
+                      <Link href={stage.href(project.id)}>
+                        <Icon className="size-4" />
+                        {stage.label}
+                      </Link>
+                    </DropdownMenuItem>
+                  )
+                })}
+                <DropdownMenuSeparator />
+                {secondaryTabs.map((tab) => {
+                  const Icon = workspaceTabIcons[tab.value]
+
+                  return (
+                    <DropdownMenuItem key={tab.value} onSelect={() => onSelectSecondaryTab(tab.value)}>
+                      <Icon className="size-4" />
+                      {tab.label}
+                      {tab.value === activeSecondaryTab ? <Check className="ml-auto size-4" /> : null}
+                    </DropdownMenuItem>
+                  )
+                })}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/projects">
+                    <FolderKanban className="size-4" />
+                    返回项目列表
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryTile icon={UserRound} label="客户" value={project.customer || "-"} detail={project.phone || "-"} />
-        <SummaryTile icon={Home} label="地址" value={project.address || "-"} detail={project.platform || "平台待定"} />
-        <SummaryTile
-          icon={ClipboardCheck}
-          label="下一步"
-          value={project.nextAction || "-"}
-          detail={`负责人：${project.nextActionOwnerName || project.owner || "-"}`}
-          className="xl:col-span-2"
-        />
-        <SummaryTile icon={CalendarClock} label="截止时间" value={formatDue(project.nextActionDueAt, project.dueNote)} />
-        <SummaryTile icon={Phone} label="等待对象" value={waitingOnLabel(project.waitingOn)} />
-        <SummaryTile
-          icon={ShieldAlert}
-          label="风险原因"
-          value={project.riskReason || (risk === "normal" ? "暂无风险" : "待补充原因")}
-          className="xl:col-span-2"
-        />
-      </CardContent>
+
+      {showBasicDetails ? (
+        <CardContent className="grid gap-3">
+          <div className="text-xs font-medium text-muted-foreground">基础资料</div>
+          <ProjectDetailsSummary project={project} />
+        </CardContent>
+      ) : null}
+
+      <Dialog open={isEditing} onOpenChange={setIsEditing}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>编辑基础资料</DialogTitle>
+            <DialogDescription>保存后立即写入项目；取消不会改动已有资料。</DialogDescription>
+          </DialogHeader>
+          {/* 只在弹窗打开时挂载，重新打开会读取最新的项目资料。 */}
+          {isEditing ? (
+            <ProjectDetailsForm
+              onCancel={() => setIsEditing(false)}
+              onSaved={(updatedProject) => {
+                onSaved(updatedProject)
+                setIsEditing(false)
+              }}
+              options={options}
+              project={project}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
 
+type ProjectDetailRow = {
+  label: string
+  value: string | null | undefined
+  wide?: boolean
+}
+
+function ProjectDetailsSummary({ project }: { project: Project }) {
+  const risk = project.riskLevel ?? project.risk
+  const rows: ProjectDetailRow[] = [
+    // 项目名已经在卡片标题上，这里不再重复。
+    { label: "客户姓名", value: project.customer },
+    { label: "联系电话", value: project.phone },
+    { label: "小区名", value: project.community },
+    { label: "楼栋", value: project.building },
+    { label: "房号", value: project.roomNo },
+    { label: "地址", value: project.address },
+    { label: "负责人", value: project.owner },
+    { label: "系统平台", value: project.platform },
+    { label: "下一步截止", value: formatDateInput(project.nextActionDueAt) },
+    { label: "下一步负责人", value: project.nextActionOwnerName || project.owner },
+    { label: "等待对象", value: waitingOnLabel(project.waitingOn) },
+    { label: "下一步", value: project.nextAction, wide: true },
+    { label: "风险原因", value: project.riskReason || (risk === "normal" ? "暂无风险" : "待补充原因"), wide: true },
+    { label: "截止说明", value: project.dueNote, wide: true },
+  ]
+
+  return (
+    <dl className="grid gap-x-6 gap-y-4 md:grid-cols-2">
+      {rows.map((row) => (
+        <div key={row.label} className={row.wide ? "grid gap-1 md:col-span-2" : "grid gap-1"}>
+          <dt className="text-xs text-muted-foreground">{row.label}</dt>
+          <dd className="text-sm break-words">{row.value?.trim() ? row.value : "-"}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
 function ProjectDetailsForm({
+  onCancel,
   onSaved,
   options,
   project,
 }: {
+  onCancel: () => void
   onSaved: (project: Project) => void
   options: ProjectOptions
   project: Project
@@ -373,97 +446,88 @@ function ProjectDetailsForm({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>基础资料</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form action={saveProject} className="grid gap-4">
-          <div className="grid gap-3 md:grid-cols-2">
-            <Field label="项目名称" name="name" placeholder="项目名称" defaultValue={project.name} />
-            <Field label="客户姓名" name="customer" placeholder="客户姓名" defaultValue={project.customer} />
-            <Field label="联系电话" name="phone" placeholder="联系电话" defaultValue={project.phone} />
-            <Field
-              datalistId="project-detail-community-options"
-              label="小区名"
-              name="community"
-              placeholder="选择或输入小区名"
-              defaultValue={project.community}
-            />
-            <datalist id="project-detail-community-options">
-              {communityOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </datalist>
-            <Field label="楼栋" name="building" placeholder="楼栋" defaultValue={project.building} />
-            <Field label="房号" name="roomNo" placeholder="房号" defaultValue={project.roomNo} />
-            <SelectField label="负责人" value={owner} options={ownerOptions} onValueChange={setOwner} />
-            <SelectField label="系统平台" value={platform} options={platformOptions} onValueChange={setPlatform} />
-            <Field
-              label="下一步截止"
-              name="nextActionDueAt"
-              placeholder="选择日期"
-              type="date"
-              defaultValue={formatDateInput(project.nextActionDueAt)}
-            />
-            <SelectField label="下一步负责人" value={nextOwner} options={nextOwnerOptions} onValueChange={setNextOwner} />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="nextAction">下一步</Label>
-            <Textarea id="nextAction" name="nextAction" defaultValue={project.nextAction} placeholder="填写下一步动作" />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="dueNote">截止说明</Label>
-            <Input id="dueNote" name="dueNote" defaultValue={project.dueNote} placeholder="待补充下一步时间" />
-          </div>
-          <div className="flex justify-end">
-            <Button type="submit" disabled={isSaving}>
-              {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-              保存修改
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+    <form action={saveProject} className="grid gap-5">
+      <div className="grid max-h-[55vh] gap-3 overflow-y-auto pe-1 md:grid-cols-2">
+        <Field label="项目名称" name="name" placeholder="项目名称" defaultValue={project.name} />
+        <Field label="客户姓名" name="customer" placeholder="客户姓名" defaultValue={project.customer} />
+        <Field label="联系电话" name="phone" placeholder="联系电话" defaultValue={project.phone} />
+        <Field
+          datalistId="project-detail-community-options"
+          label="小区名"
+          name="community"
+          placeholder="选择或输入小区名"
+          defaultValue={project.community}
+        />
+        <datalist id="project-detail-community-options">
+          {communityOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </datalist>
+        <Field label="楼栋" name="building" placeholder="楼栋" defaultValue={project.building} />
+        <Field label="房号" name="roomNo" placeholder="房号" defaultValue={project.roomNo} />
+        <SelectField label="负责人" value={owner} options={ownerOptions} onValueChange={setOwner} />
+        <SelectField label="系统平台" value={platform} options={platformOptions} onValueChange={setPlatform} />
+        <Field
+          label="下一步截止"
+          name="nextActionDueAt"
+          placeholder="选择日期"
+          type="date"
+          defaultValue={formatDateInput(project.nextActionDueAt)}
+        />
+        <SelectField label="下一步负责人" value={nextOwner} options={nextOwnerOptions} onValueChange={setNextOwner} />
+        <div className="grid gap-2 md:col-span-2">
+          <Label htmlFor="nextAction">下一步</Label>
+          <Textarea id="nextAction" name="nextAction" defaultValue={project.nextAction} placeholder="填写下一步动作" />
+        </div>
+        <div className="grid gap-2 md:col-span-2">
+          <Label htmlFor="dueNote">截止说明</Label>
+          <Input id="dueNote" name="dueNote" defaultValue={project.dueNote} placeholder="待补充下一步时间" />
+        </div>
+      </div>
+      <DialogFooter>
+        <Button type="button" variant="ghost" disabled={isSaving} onClick={onCancel}>
+          取消
+        </Button>
+        <Button type="submit" disabled={isSaving}>
+          {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+          保存修改
+        </Button>
+      </DialogFooter>
+    </form>
   )
 }
 
 function SolutionQuotePanel({ project }: { project: Project }) {
   const [quickOpen, setQuickOpen] = React.useState(false)
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>方案报价</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <ProjectSavedDesignSummary projectId={project.id} />
-        <div className="flex flex-wrap gap-2">
-          <Button asChild>
-            <Link href={`/point-map?projectId=${encodeURIComponent(project.id)}`}>
-              <MapPinned className="size-4" />
-              打开草稿继续核对
-            </Link>
-          </Button>
-          <Button variant="secondary" onClick={() => setQuickOpen(true)}>
-            <Sparkles className="size-4" />
-            快速报价
-          </Button>
-          <Button asChild variant="outline">
-            <Link href={`/quotes?projectId=${encodeURIComponent(project.id)}`}>
-              <FileText className="size-4" />
-              查看报价版本
-            </Link>
-          </Button>
-        </div>
-        <QuickQuoteDialog
-          projectId={project.id}
-          open={quickOpen}
-          onOpenChange={setQuickOpen}
-        />
-      </CardContent>
-    </Card>
+    <>
+      <Card>
+        <CardHeader>
+          <CardAction>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => setQuickOpen(true)}>
+                <Sparkles className="size-4" />
+                快速报价
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <Link href={`/quotes?projectId=${encodeURIComponent(project.id)}`}>
+                  <FileText className="size-4" />
+                  打开报价单
+                </Link>
+              </Button>
+            </div>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          <ProjectSavedDesignSummary projectId={project.id} />
+        </CardContent>
+      </Card>
+
+      <QuickQuoteDialog projectId={project.id} open={quickOpen} onOpenChange={setQuickOpen} />
+    </>
   )
 }
 
@@ -606,40 +670,6 @@ function memberStatusLabel(status: ProjectAccessPayload["members"][number]["stat
   return "已移除"
 }
 
-function StagePanel({
-  items,
-  primaryHref,
-  primaryLabel,
-  title,
-}: {
-  items: string[]
-  primaryHref?: string
-  primaryLabel?: string
-  title: string
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-2 md:grid-cols-2">
-          {items.map((item) => (
-            <div key={item} className="rounded-lg border bg-muted/20 px-3 py-2 text-sm">
-              {item}
-            </div>
-          ))}
-        </div>
-        {primaryHref && primaryLabel ? (
-          <Button asChild>
-            <Link href={primaryHref}>{primaryLabel}</Link>
-          </Button>
-        ) : null}
-      </CardContent>
-    </Card>
-  )
-}
-
 function Field({
   datalistId,
   defaultValue,
@@ -721,23 +751,6 @@ function waitingOnLabel(waitingOn: Project["waitingOn"]) {
   if (waitingOn === "internal") return "内部团队"
   if (waitingOn === "vendor") return "供应商"
   return "无等待"
-}
-
-function formatDue(value: Project["nextActionDueAt"], fallback: string) {
-  if (!value) {
-    return fallback || "未设截止"
-  }
-
-  const date = new Date(value)
-
-  if (!Number.isFinite(date.getTime())) {
-    return fallback || "未设截止"
-  }
-
-  return new Intl.DateTimeFormat("zh-CN", {
-    day: "2-digit",
-    month: "2-digit",
-  }).format(date)
 }
 
 function formatDateInput(value: Project["nextActionDueAt"]) {

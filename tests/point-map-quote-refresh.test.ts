@@ -39,4 +39,10 @@ describe("saved point-map to local quote preview", () => {
     expect(fetcher).toHaveBeenCalledOnce()
     expect(publish).not.toHaveBeenCalled()
   })
+  it("reports a bounded timeout instead of leaving the workbench stuck on saving", async () => {
+    const fetcher = vi.fn(async () => { throw Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" }) })
+    const publish = vi.fn()
+    expect(await refreshPointMapQuote(project, "A", { expectedRevision: 4, fetcher, publish, timeoutMs: 1 })).toEqual({ updated: false, message: "报价预览同步超时，请稍后再次保存草稿重试。" })
+    expect(publish).not.toHaveBeenCalled()
+  })
 })

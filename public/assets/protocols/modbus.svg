@@ -1,1 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="180" height="60" viewBox="0 0 180 60"><rect width="180" height="60" rx="8" fill="#f3f6f3"/><text x="90" y="36" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#222d2a">Modbus</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120" role="img" aria-labelledby="title">
+  <title id="title">Modbus</title>
+  <rect width="320" height="120" rx="28" fill="#1D4ED8"/>
+  <path d="M58 60h42m120 0h42M120 38h80v44h-80z" fill="none" stroke="#BFDBFE" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/>
+  <text x="50%" y="74" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="800" fill="#fff">Modbus</text>
+</svg>

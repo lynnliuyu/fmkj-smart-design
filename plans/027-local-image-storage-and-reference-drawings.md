@@ -21,4 +21,6 @@ Date: 2026-10-16
 
 ## 实际项目
 
+通过现有 saveProjectPointMap module 的完整权限 / revision 校验保存示例项目 r6，仅增加 bt-flat 的灯光 / 开关图。写前整稿与 r5 备份一致；写后 33 点（31 已定位、2 待定位）、场景、工程底图、CAD 与客户展示底图一致。数据库报价逐字段一致，仍为 QT-EXAMPLE-DEMO（22 行、33 台、¥13,641，全部未核验范围沿用原记录）。未确认新设计版本，未生成或改写固定交付。资料及比对保存在忽略目录 .local/bangtai-jinghe/workbench-drawings/。
+
 完成记录：真实工作台已加载 r6，保留原本机备份，布局 / 灯光 / 开关均可切换，截图为 workbench-three-drawings.jpg。最终 83 文件 / 853 测试、类型检查、本次文件 ESLint 与 git diff --check 通过。本轮未运行生产构建，未生成客户固定交付或验证新的客户导出。窄屏视口覆盖未被浏览器应用，不能据此声称手机端已验收。

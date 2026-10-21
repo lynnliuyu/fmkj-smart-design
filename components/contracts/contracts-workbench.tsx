@@ -1,22 +1,27 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
-  BadgeCheck,
   CalendarClock,
   Edit3,
   Eye,
-  FileCheck2,
-  FileText,
-  FolderKanban,
   Link2,
   Loader2,
   MoreHorizontal,
-  Search,
   UploadCloud,
 } from "lucide-react";
 
+import { ProjectListHeader, ProjectSearchInput } from "@/components/business/project-list-shell";
+import { StatStrip } from "@/components/business/summary-tile";
+import {
+  fetchProjectListRows,
+  formatProjectDate,
+  projectMatchesQuery,
+  projectStageLabel,
+} from "@/lib/project-list";
 import { SummaryTile } from "@/components/business/summary-tile";
 import { AdminDataTable } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
@@ -35,7 +40,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
@@ -71,17 +75,12 @@ type Project = {
   nextAction: string;
 };
 
-const stageLabels: Record<ProjectStage, string> = {
-  acceptance: "交付验收",
-  aftercare: "售后维护",
-  contract: "合同收款",
-  install: "安装调试",
-  measure: "现场测量",
-  new: "新建跟进",
-  proposal: "方案报价",
-};
+
 
 export function ContractsWorkbench() {
+  const searchParams = useSearchParams();
+  /** 项目内进入时只显示该项目；/contracts 本身仍保留全量列表。 */
+  const requestedProjectId = searchParams.get("projectId");
   const [projects, setProjects] = React.useState<Project[]>([]);
   const [attachmentsByProject, setAttachmentsByProject] = React.useState<
     Record<string, ProjectAttachment[]>
@@ -101,9 +100,7 @@ export function ContractsWorkbench() {
       setIsLoading(true);
 
       try {
-        const response = await fetch("/api/projects", { cache: "no-store" });
-        const payload = (await response.json()) as { data?: Project[] };
-        const nextProjects = payload.data?.filter(isProject) ?? [];
+        const nextProjects = await fetchProjectListRows<Project>();
 
         if (!active) return;
 
@@ -135,31 +132,39 @@ export function ContractsWorkbench() {
     };
   }, []);
 
-  const visibleProjects = projects.filter((project) => {
-    const value = query.trim().toLowerCase();
-    const contracts = attachmentsByProject[project.id] ?? [];
-    const haystack = [
+  const scopedProject = requestedProjectId
+    ? projects.find((project) => project.id === requestedProjectId) ?? null
+    : null;
+  const scopedProjects = requestedProjectId
+    ? scopedProject
+      ? [scopedProject]
+      : []
+    : projects;
+
+  const visibleProjects = scopedProjects.filter((project) =>
+    projectMatchesQuery(query, [
       project.name,
       project.code,
       project.customer,
-      stageLabels[project.stage],
-      ...contracts.map((contract) => contract.fileName),
-    ]
-      .join(" ")
-      .toLowerCase();
-
-    return haystack.includes(value);
-  });
+      project.stage,
+      projectStageLabel(project.stage),
+      ...(attachmentsByProject[project.id] ?? []).map((contract) => contract.fileName),
+    ]),
+  );
   const previewProject =
     projects.find((project) => project.id === previewProjectId) ?? null;
   const previewContracts = previewProject
     ? (attachmentsByProject[previewProject.id] ?? [])
     : [];
-  const signedProjects = projects.filter(
+  const signedProjects = scopedProjects.filter(
     (project) => (attachmentsByProject[project.id] ?? []).length > 0,
   );
   const contractAmount = signedProjects.reduce(
     (sum, project) => sum + Number(project.quoteAmount ?? 0),
+    0,
+  );
+  const scopedFileCount = scopedProjects.reduce(
+    (sum, project) => sum + (attachmentsByProject[project.id] ?? []).length,
     0,
   );
   const contractColumns = React.useMemo(
@@ -249,41 +254,41 @@ export function ContractsWorkbench() {
 
   return (
     <section className="flex flex-col gap-5">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">合同管理</h1>
-        <div className="relative w-full lg:max-w-sm">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索项目、客户、合同文件"
-            className="h-9 pl-9"
-          />
-        </div>
+      <div>
+        <ProjectListHeader
+          title="合同管理"
+          actions={
+            <ProjectSearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder="搜索项目、客户、合同文件"
+            />
+          }
+        />
       </div>
 
-      <div className="grid gap-3 md:grid-cols-4">
-        <MetricCard
-          label="项目数"
-          value={projects.length.toString()}
-          icon={FolderKanban}
-        />
-        <MetricCard
-          label="已上传合同"
-          value={signedProjects.length.toString()}
-          icon={BadgeCheck}
-        />
-        <MetricCard
-          label="合同文件"
-          value={Object.values(attachmentsByProject).flat().length.toString()}
-          icon={FileCheck2}
-        />
-        <MetricCard
-          label="签约金额"
-          value={money(contractAmount)}
-          icon={FileText}
-        />
-      </div>
+      {requestedProjectId ? (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border bg-muted/20 px-3 py-2 text-sm">
+          <span className="font-medium">
+            {scopedProject ? `仅看本项目：${scopedProject.name}` : "未找到该项目"}
+          </span>
+          <Link
+            href="/contracts"
+            className="ms-auto text-sm text-muted-foreground underline-offset-3 hover:text-foreground hover:underline"
+          >
+            查看全部项目
+          </Link>
+        </div>
+      ) : null}
+
+      <StatStrip
+        items={[
+          { label: "项目数", value: scopedProjects.length },
+          { label: "已上传合同", value: signedProjects.length },
+          { label: "合同文件", value: scopedFileCount },
+          { label: "签约金额", value: money(contractAmount) },
+        ]}
+      />
 
       <div className="grid gap-5">
         <Card>
@@ -306,7 +311,7 @@ export function ContractsWorkbench() {
                   project.name,
                   project.code,
                   project.customer,
-                  stageLabels[project.stage],
+                  projectStageLabel(project.stage),
                   ...contracts.map((contract) => contract.fileName),
                 ]
                   .join(" ")
@@ -397,7 +402,7 @@ function createContractColumns(
       header: "创建时间",
       cell: ({ row }) => (
         <div className="text-muted-foreground">
-          {formatDate(row.original.createdAt)}
+          {formatProjectDate(row.original.createdAt)}
         </div>
       ),
     },
@@ -558,7 +563,7 @@ function ContractPreview({
                 </span>
                 <span className="text-xs text-muted-foreground">
                   {formatFileSize(contract.size)} /{" "}
-                  {formatDate(contract.createdAt)}
+                  {formatProjectDate(contract.createdAt)}
                 </span>
               </span>
               <Link2 className="size-4 shrink-0 text-muted-foreground" />
@@ -619,40 +624,13 @@ function ContractUploadButton({
   );
 }
 
-function MetricCard({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="flex items-center justify-between gap-3 p-4">
-        <div>
-          <div className="text-xs text-muted-foreground">{label}</div>
-          <div className="mt-1 text-2xl font-semibold">{value}</div>
-        </div>
-        <span className="flex size-9 items-center justify-center rounded-md bg-muted text-muted-foreground">
-          <Icon className="size-4" />
-        </span>
-      </CardContent>
-    </Card>
-  );
-}
 
 function StageBadge({ stage }: { stage: ProjectStage }) {
   return (
     <Badge variant={stage === "contract" ? "default" : "outline"}>
-      {stageLabels[stage] ?? stage}
+      {projectStageLabel(stage)}
     </Badge>
   );
-}
-
-function isProject(project: Project | undefined): project is Project {
-  return Boolean(project?.id && project.name && project.stage);
 }
 
 function money(value: number) {
@@ -667,18 +645,4 @@ function formatFileSize(size: number) {
   if (!Number.isFinite(size) || size <= 0) return "未知大小";
   if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function formatDate(value: string | undefined) {
-  if (!value) return "-";
-
-  const date = new Date(value);
-
-  if (!Number.isFinite(date.getTime())) return "-";
-
-  return new Intl.DateTimeFormat("zh-CN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
 }

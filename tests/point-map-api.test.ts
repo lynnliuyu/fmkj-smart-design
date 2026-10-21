@@ -6,25 +6,18 @@ import { MAX_POINT_MAP_REQUEST_BYTES, PointMapServiceError } from "../lib/point-
 
 const context = { params: Promise.resolve({ id: "11111111-1111-4111-8111-111111111111" }) }
 const account = buildAccountContext({ userId: "22222222-2222-4222-8222-222222222222", name: "Synthetic", role: "pro" })
-const payload = { data: null, revision: 0, versions: [] }
+const payload = { data: null, revision: 0 }
 
 describe("point-map API handlers", () => {
-  it("returns private responses and forwards confirmed version requests", async () => {
+  it("returns the draft with private cache headers", async () => {
     const read = vi.fn().mockResolvedValue(payload)
     const handlers = createPointMapApiHandlers({ getContext: async () => account, read })
+    // 确认版本下线后不再支持按版本读取：多余的 version 参数会被忽略，读取的始终是当前草稿。
     const response = await handlers.GET(new Request("https://example.test/api/projects/id/point-map?version=3"), context)
     expect(response.status).toBe(200)
     expect(response.headers.get("cache-control")).toBe("private, no-store")
     await expect(response.json()).resolves.toEqual(payload)
-    expect(read).toHaveBeenCalledWith(account, "11111111-1111-4111-8111-111111111111", 3)
-  })
-
-  it.each(["0", "-1", "1.5", "1e3", "abc", "2147483648", "1&version=2"])("rejects invalid version query %s", async (version) => {
-    const read = vi.fn().mockResolvedValue(payload)
-    const handlers = createPointMapApiHandlers({ getContext: async () => account, read })
-    const response = await handlers.GET(new Request(`https://example.test/api/point-map?version=${version}`), context)
-    expect(response.status).toBe(400)
-    expect(read).not.toHaveBeenCalled()
+    expect(read).toHaveBeenCalledWith(account, "11111111-1111-4111-8111-111111111111")
   })
 
   it("requires a session before reading the body or touching a design", async () => {
@@ -36,10 +29,10 @@ describe("point-map API handlers", () => {
     expect(save).not.toHaveBeenCalled()
   })
 
-  it("accepts JSON and forwards expectedRevision and explicit confirmation", async () => {
+  it("accepts JSON and forwards the plan with its expected revision", async () => {
     const save = vi.fn().mockResolvedValue(payload)
     const handlers = createPointMapApiHandlers({ getContext: async () => account, save })
-    const input = { plan: { projectId: "synthetic" }, expectedRevision: 4, confirm: true }
+    const input = { plan: { projectId: "synthetic" }, expectedRevision: 4 }
     const response = await handlers.PUT(new Request("https://example.test/api/point-map", { method: "PUT", headers: { "Content-Type": "application/json; charset=utf-8" }, body: JSON.stringify(input) }), context)
     expect(response.status).toBe(200)
     expect(save).toHaveBeenCalledWith(account, "11111111-1111-4111-8111-111111111111", input)

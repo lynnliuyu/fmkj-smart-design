@@ -13,7 +13,7 @@ vi.mock("../lib/account-context.js", async (importOriginal) => {
 })
 
 const sessionUser: AuthUser = {
-  email: "member@example.com",
+  email: "lynn@example.com",
   name: "Lynn",
   phone: null,
   role: "member",

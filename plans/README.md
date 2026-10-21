@@ -38,6 +38,12 @@ Historical note: this index was created before the initial commit. The checkout 
 | 026  | 默认窗帘未核验报价与同步失败重试                                   | P1       | S      | 025          | DONE：实际报价入库；未知轨道明确未报 |
 
 | 027  | 本机图片独立缓存与布局、灯光、开关图对照 | P1 | M | 024—026 | DONE：IndexedDB 迁移、三图配准与 r6 页面验收完成 |
+| 028  | 线上托管、本地设备与可选官方产品库基础 | P1 | L | 020、021 | TODO：ADR 0010 已定方向；部署、资料同步、升级与上线验收待实施 |
+| 029  | 概览移入侧边栏，顶部栏按项目上下文切换 | P1 | S | 021 | DONE：顶部栏不再重复选项目；见计划完成记录 |
+| 032  | 全站功能页面审查（简化与优化候选） | P1 | M | 029 | DONE：31 页实测后完成 S2/S4、U1–U5、U7、U10；U6 与产品库密度留待新计划 |
+| 034  | 点位图标回到实心画风并生成 v2 | P1 | L | 019、ADR 0003 | PROPOSED：用户选旧实心风格；原型已出（tmp/icon-compare/proto.png），待生成 44 个 v2 图标 |
+| 030  | 点位草稿保存：单人单机的简化收口 | P1 | S | 016, 021, 027 | IN PROGRESS：030.1 显式覆盖与 030.2 失败提示已实现；030.3/030.4 为 P2 待定 |
+| 033  | 本地设备版更新流程与运营方服务接口 | P1 | M | 021、028 | IN PROGRESS：更新/备份脚本与设备版编排已在黑豹 X2 真机端到端验证（首次部署、备份与真实恢复、v0.1.0→v0.1.1 更新）；上游接口、文件存储真机验收与管理端可见性待做 |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
 
@@ -45,6 +51,9 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
 
 - Plan 020 的执行合同见 `docs/product-point-mapping-plan.md`；实现、隔离验收、主库应用和剩余产品核验的状态分别见 `020-product-point-mapping.md`。不要将初步分类或批量入库理解为所有型号及价格均已核验。
 - Plan 021 记录本轮梳理与精简的进度；默认型号可作未核验客户报价、换型限定本项目、删来源行联动删点位已由用户明确并记录 ADR 0006。不得根据旧测试或最初建议改回其他语义。
+- Plan 029 只调整导航入口与项目上下文。执行类段落已改为直达链接（`legacyWorkspaceTabHref` 保留旧地址）；顶部栏「合同」现在指向 `/contracts?projectId=`，而 `/contracts` 目前仍不按 `projectId` 过滤，所以进入后看到的是全部项目的合同表。
+- Plan 034 只改图标的渲染介质：共享几何仍是一份，CAD 图块保持线稿，屏幕/图例/导出用 v2 实心；v1 资产不删除，历史交付引用不变。
+- Plan 032 是对全部功能页的只读审查。S1 结论已更正（`/users`、`/account-system` 本是 redirect 存根），S2/S4、U1–U5、U7、U10 已实施；U6（点位图首屏密度）与产品库卡片密度留待新计划，不做未确认的语义变更。
 
 - Plan 002 depends on Plan 001 because database fields and entities need stable account-tier language and acceptance rules.
 - Plan 003 depends on Plans 001 and 002 because permission checks need both product rules and the data shape that stores account, plan, organization, role, and limit information.

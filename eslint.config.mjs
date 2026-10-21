@@ -16,6 +16,8 @@ const eslintConfig = [
       "backups/**",
       "public/**",
       "scripts/legacy/**",
+      // 第三方预编译产物（libredwg-web 的 dist/wasm 与 cadcraft 的 tar 包），不是本仓库的代码。
+      "docker/cad-export/vendor/**",
     ],
   },
 ]

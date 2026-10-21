@@ -54,7 +54,6 @@ function emptyEditorDraft(projectKey: string): QuoteEditorDraft {
 
 export function useQuoteAuthoring({ requestedProjectId }: { requestedProjectId: string | null }) {
   const [databaseProducts, setDatabaseProducts] = React.useState<QuoteProductOption[] | null>(null)
-  const [databaseProjects, setDatabaseProjects] = React.useState<QuoteProjectOption[]>([])
   const [selectedProjectId, setSelectedProjectId] = React.useState(requestedProjectId ?? "")
   const [snapshotSignal, setSnapshotSignal] = React.useState(0)
   const [roomNotice, setRoomNotice] = React.useState("")
@@ -87,7 +86,6 @@ export function useQuoteAuthoring({ requestedProjectId }: { requestedProjectId: 
   const projectSelectionRevisionRef = React.useRef(0)
 
   const quoteProducts = databaseProducts?.length ? databaseProducts : fallbackProducts
-  const projectOptions = databaseProjects.length ? databaseProjects.map((project) => project.name) : quoteProjects
   const productCategories = unique(quoteProducts.map((item) => item.category))
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const productsPayableTotal = items.reduce((sum, item) => sum + lineTotal(item), 0)
@@ -137,8 +135,6 @@ export function useQuoteAuthoring({ requestedProjectId }: { requestedProjectId: 
         if (!active || nextProjects.length === 0) {
           return
         }
-
-        setDatabaseProjects(nextProjects)
 
         const matchedProject = projectId ? nextProjects.find((project) => project.id === projectId) : nextProjects[0]
 
@@ -457,14 +453,6 @@ export function useQuoteAuthoring({ requestedProjectId }: { requestedProjectId: 
     return { ...result, projectId, projectName }
   }
 
-  function changeProject(projectName: string) {
-    projectSelectionRevisionRef.current += 1
-    const matchedProject = databaseProjects.find((project) => project.name === projectName)
-    setSelectedProject(projectName)
-    setSelectedProjectId(matchedProject?.id ?? "")
-    setSaveState("idle")
-  }
-
   function setInstallationFee(value: number) {
     const fee = Math.max(0, Number(value) || 0)
     markEdited({ installationFee: fee, feeEdited: true })
@@ -530,7 +518,6 @@ export function useQuoteAuthoring({ requestedProjectId }: { requestedProjectId: 
     actions: {
       addProductToQuote,
       addRoom,
-      changeProject,
       deleteRoom,
       removeItem,
       renameRoom,
@@ -547,7 +534,6 @@ export function useQuoteAuthoring({ requestedProjectId }: { requestedProjectId: 
       groups,
       payableTotal,
       productCategories,
-      projectOptions,
       quoteProducts,
       subtotal,
     },

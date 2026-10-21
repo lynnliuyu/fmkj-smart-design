@@ -12,7 +12,7 @@ import { Pool } from "pg"
 
 loadLocalEnv();
 
-const DEFAULT_EMAIL = "admin@example.com"
+const DEFAULT_EMAIL = "admin@fmkj.com"
 const DEFAULT_NAME = "超级管理员"
 
 const args = process.argv.slice(2).reduce((acc, arg) => {

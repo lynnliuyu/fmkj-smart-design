@@ -231,6 +231,25 @@ export function fillLoadedPointMapFloorDimensions(
   });
 }
 
+/**
+ * 「关联具体型号」的核验快照由服务端 `hydratePlanSelections` 按目录生成，工作台从不自己写
+ * 这些字段；保存成功后本机草稿也只会拿到服务端返回的版本。因此比较本机稿与云端稿时忽略
+ * `selection`，否则服务端每次重新核验都会被误判成「他人改了设计」而卡住保存。
+ * 商品本身（productId / 房间 / 坐标 / 场景 / 配套用料行）不同仍然是真实差异。
+ */
+function pointMapDesignPoint(point: PointMapNode) {
+  const copy = { ...point };
+  delete copy.selection;
+  if (copy.materials) {
+    copy.materials = copy.materials.map((material) => {
+      const entry = { ...material };
+      delete entry.selection;
+      return entry;
+    });
+  }
+  return copy;
+}
+
 /** Missing legacy measurements do not represent a conflicting cloud design edit. */
 export function samePointMapDesignContent(
   plan: PointMapPlan,
@@ -238,8 +257,12 @@ export function samePointMapDesignContent(
 ): boolean {
   if (!other) return false;
   try {
-    const left = exportPointMapDraft(plan);
-    const right = exportPointMapDraft(normalizeDesignPlan(other));
+    const strip = (draft: ReturnType<typeof exportPointMapDraft>) => ({
+      ...draft,
+      points: draft.points.map(pointMapDesignPoint),
+    });
+    const left = strip(exportPointMapDraft(plan));
+    const right = strip(exportPointMapDraft(normalizeDesignPlan(other)));
     for (const floor of left.floors) {
       const peer = right.floors.find(
         (item) =>
@@ -288,4 +311,42 @@ export function samePointMapQuoteSource(plan: PointMapPlan, previous: PointMapPl
     }) };
   }
   return JSON.stringify(source(plan)) === JSON.stringify(source(previous));
+}
+
+function base64PayloadBytes(source: string) {
+  const marker = ";base64,";
+  const at = source.indexOf(marker);
+  return at === -1
+    ? source.length
+    : Math.floor(((source.length - at - marker.length) * 3) / 4);
+}
+
+function megabytes(bytes: number) {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * 保存返回 413 时列出最占空间的底图。多楼层项目只看「底图过大」无法判断该压缩哪一张，
+ * 也分不清是单张超限还是整包 32 MB 超限。
+ */
+export function floorplanPayloadAdvice(plan: PointMapPlan): string {
+  const images: Array<{ label: string; bytes: number }> = [];
+  for (const floor of plan.floors ?? []) {
+    const entries: Array<[string, string | undefined]> = [
+      [`${floor.name}工程底图`, floor.floorplanDataUrl],
+      [`${floor.name}展示底图`, floor.presentation?.imageDataUrl],
+      [`${floor.name}灯光对照图`, floor.references?.lighting?.imageDataUrl],
+      [`${floor.name}开关对照图`, floor.references?.switch?.imageDataUrl],
+    ];
+    for (const [label, source] of entries)
+      if (source) images.push({ label, bytes: base64PayloadBytes(source) });
+  }
+  if (!images.length) return "";
+  const total = images.reduce((sum, image) => sum + image.bytes, 0);
+  const largest = [...images]
+    .sort((left, right) => right.bytes - left.bytes)
+    .slice(0, 3);
+  return ` 当前草稿图片合计约 ${megabytes(total)}；最大的是${largest
+    .map((image) => `${image.label} ${megabytes(image.bytes)}`)
+    .join("、")}。请先压缩这些底图再重试。`;
 }

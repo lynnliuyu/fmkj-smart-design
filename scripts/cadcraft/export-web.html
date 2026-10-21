@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>CAD 图纸导出 · 繁梦空间</title>
+  <link rel="stylesheet" href="/export-web.css">
+  <script src="/export-web.js" defer></script>
+</head>
+<body>
+  <header class="topbar"><a href="/" class="brand">繁梦空间<span>CAD 图纸导出</span></a><span class="local">本机处理</span></header>
+  <main>
+    <div class="intro"><h1>把 CAD 变成一张张图纸。</h1><p>添加 DWG 或 DXF，导出 PDF 与高清 PNG。实际用时和每张图的结果，都在这里看。</p></div>
+    <section class="workspace" aria-label="添加文件并导出">
+      <form id="export-form">
+        <label class="dropzone" id="dropzone" for="file">
+          <svg width="36" height="36" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M18 3H8a2 2 0 0 0-2 2v22a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V11L18 3Z" stroke="currentColor" stroke-width="1.5"/><path d="M18 3v8h8M11 20l5-5 5 5M16 15v10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <strong id="filename">点击添加 CAD 文件，或拖到这里</strong><span id="file-detail">DWG / DXF · 单个文件最大 100 MB</span>
+          <input id="file" type="file" accept=".dwg,.dxf" aria-label="添加 DWG 或 DXF 文件">
+        </label>
+        <div class="scope-controls"><label for="scope">导出范围<select id="scope"><option value="all">整份原图 · 总览与所有识别图框</option><option value="space">指定布局 · 逐张导出，不含总览</option></select></label><label for="space" id="space-label" hidden>原始布局名称<input id="space" placeholder="例如：平面图" maxlength="100"></label></div>
+        <div class="controls"><label for="color-mode">输出配色<select id="color-mode"><option value="readable">清晰黑白 · 同时保留原色</option><option value="original">CAD 原色 · 减少配色处理</option></select></label><button type="submit" id="export-button" disabled>开始导出<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+        <p class="hint">只想看看效果？<button type="button" class="text-button" id="use-demo">添加演示图纸</button><span>演示图纸含 3 个图框，不代表真实施工图的处理速度。</span></p>
+      </form>
+      <aside class="status-panel" aria-label="导出状态">
+        <div class="status-heading"><h2 id="status-title">等待添加文件</h2><span id="timer" class="timer">00:00</span></div>
+        <p id="progress" role="status" aria-live="polite">选择图纸后，点击“开始导出”。</p>
+        <dl class="timings"><div><dt>上传</dt><dd id="upload-time">—</dd></div><div><dt>排队</dt><dd id="queue-time">—</dd></div><div><dt>导出</dt><dd id="export-time">—</dd></div></dl>
+        <p id="error" class="error" role="alert" hidden></p>
+        <p class="status-note">图纸保存在这台电脑，不会发送到第三方转换网站。大型施工图可能需要数分钟。</p>
+      </aside>
+    </section>
+    <section id="results" class="results" aria-labelledby="result-title" hidden>
+      <div class="result-heading"><div><h2 id="result-title">导出结果</h2><p id="result-summary"></p></div><div id="downloads" class="download-actions"></div></div>
+      <p class="review-note">请先核对原图总览。自动识别的图框数不代表完整图纸数；重名方案会分别保留，分类依据图名。当前输出为适配纸张的审阅图，施工打印比例需另核对。</p>
+      <div class="filters"><label for="category">显示图纸<select id="category"><option value="all">全部图纸与总览</option><option value="layout">平面布置图</option><option value="lighting">灯光点位图</option><option value="switch">开关点位图</option><option value="overview">原图总览</option><option value="other">其他图纸</option></select></label><label class="search-label" for="search">搜索<input id="search" type="search" placeholder="图名、布局或页码"></label><span id="visible-count" role="status"></span></div>
+      <div id="pages" class="pages"></div><p id="empty-results" hidden>没有匹配的图纸。试试“全部图纸与总览”，或清除搜索。</p>
+    </section>
+    <details class="methods"><summary>怎样选，才能又快又准？</summary><div><p>已经分好布局的文件，可以直接逐布局输出；所有图都放在模型空间时，要先识别图框。识别和出图是两个独立问题，换转换器不一定能解决漏图。</p><ul><li><a href="https://github.com/storytold/cadcraft" target="_blank" rel="noreferrer">CADCraft</a>：当前测试入口，支持本机无头调用，适合先用自己的图纸验证。</li><li><a href="https://github.com/mozman/ezdxf" target="_blank" rel="noreferrer">ezdxf</a>：适合 DXF 的批量布局和窗口渲染。DWG 需要先转换，并核对字体、裁剪与视口。</li><li><a href="https://www.opendesign.com/products/drawings" target="_blank" rel="noreferrer">ODA Drawings SDK</a>：支持 DWG 与 PDF 输出，属于需要进一步评估授权的商业方案。</li></ul><p>本页记录真实用时，不预设速度承诺。验收时请对照原 CAD，检查图框、中文、尺寸、冻结图层和视口裁剪。</p></div></details>
+    <footer>原图逐页导出工具 · 结果供图纸核对，不自动写入客户项目。</footer>
+  </main>
+</body>
+</html>

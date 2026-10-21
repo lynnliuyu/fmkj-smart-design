@@ -1,6 +1,14 @@
 "use client"
 
+import { StatStrip } from "@/components/business/summary-tile"
+import { ProjectListHeader, ProjectSearchInput } from "@/components/business/project-list-shell";
 import { ProjectViewSwitch } from "@/components/projects/project-view-switch";
+import {
+  fetchProjectListRows,
+  formatProjectDate,
+  projectMatchesQuery,
+  projectStageLabel,
+} from "@/lib/project-list";
 import { flushSync } from "react-dom"
 import { releasePointMapPrintFloors, renderPointMapPrintFloors, waitForPrintImages, type PointMapPrintFloor } from "@/lib/point-map-print"
 import { prepareQuoteExportSource } from "@/lib/project-delivery-client"
@@ -129,7 +137,7 @@ export function QuoteBuilder() {
     selectedProjectId,
     status,
   } = quote.state
-  const { discountTotal, groups, payableTotal, projectOptions, quoteProducts, subtotal } = quote.computed
+  const { discountTotal, groups, payableTotal, quoteProducts, subtotal } = quote.computed
   const [floorPage, setFloorPage] = React.useState<string | null>(null)
   const [printSnapshot, setPrintSnapshot] = React.useState<QuotePrintSnapshot | null>(null)
   const [isPreparingPdf, setIsPreparingPdf] = React.useState(false)
@@ -151,7 +159,6 @@ export function QuoteBuilder() {
   const {
     addProductToQuote,
     addRoom,
-    changeProject,
     deleteRoom,
     removeItem,
     renameRoom,
@@ -285,7 +292,7 @@ export function QuoteBuilder() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
           <Card className="quote-print-card">
             <CardHeader>
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -337,21 +344,6 @@ export function QuoteBuilder() {
               <CardTitle>费用与房间</CardTitle>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div className="grid gap-2">
-                <Label htmlFor="project">关联项目</Label>
-                <Select value={selectedProject} onValueChange={changeProject}>
-                  <SelectTrigger id="project">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projectOptions.map((projectItem) => (
-                      <SelectItem key={projectItem} value={projectItem}>
-                        {projectItem}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="grid gap-2">
                 <Label htmlFor="installation-fee">{"\u8c03\u8bd5\u5b89\u88c5\u8d39\u7528"}</Label>
                 <Input
@@ -419,9 +411,7 @@ function QuoteIndex() {
       setIsLoading(true)
 
       try {
-        const response = await fetch("/api/projects", { cache: "no-store" })
-        const payload = (await response.json()) as { data?: QuoteProject[] }
-        const nextProjects = payload.data?.filter((project) => project.id && project.name) ?? []
+        const nextProjects = await fetchProjectListRows<QuoteProject>()
 
         if (active) {
           setProjects(nextProjects)
@@ -444,16 +434,15 @@ function QuoteIndex() {
     }
   }, [])
 
-  const visibleProjects = projects.filter((project) => {
-    const keyword = query.trim().toLowerCase()
-
-    if (!keyword) return true
-
-    return [project.name, project.code, project.customer, project.stage]
-      .join(" ")
-      .toLowerCase()
-      .includes(keyword)
-  })
+  const visibleProjects = projects.filter((project) =>
+    projectMatchesQuery(query, [
+      project.name,
+      project.code,
+      project.customer,
+      project.stage,
+      projectStageLabel(project.stage),
+    ]),
+  )
   const previewProject = projects.find((project) => project.id === previewProjectId) ?? null
   const quotedProjects = projects.filter((project) => Number(project.quoteAmount ?? 0) > 0)
   const quoteTotal = quotedProjects.reduce((sum, project) => sum + Number(project.quoteAmount ?? 0), 0)
@@ -479,24 +468,24 @@ function QuoteIndex() {
 
   return (
     <section className="flex flex-col gap-5">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">报价列表</h1>
-        <div className="relative w-full lg:max-w-sm">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
+      <ProjectListHeader
+        title="报价列表"
+        actions={
+          <ProjectSearchInput
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={setQuery}
             placeholder="搜索项目、客户、报价状态"
-            className="h-9 pl-9"
           />
-        </div>
-      </div>
+        }
+      />
 
-      <div className="grid gap-3 md:grid-cols-3">
-        <SummaryCard label="项目数" value={projects.length.toString()} />
-        <SummaryCard label="已有报价" value={quotedProjects.length.toString()} />
-        <SummaryCard label="报价金额" value={money(quoteTotal)} />
-      </div>
+      <StatStrip
+        items={[
+          { label: "项目数", value: projects.length },
+          { label: "已有报价", value: quotedProjects.length },
+          { label: "报价金额", value: money(quoteTotal) },
+        ]}
+      />
 
       <div className="grid gap-5">
         <Card>
@@ -570,7 +559,7 @@ function createQuoteProjectColumns(onPreview: (project: QuoteProject) => void): 
       accessorKey: "createdAt",
       header: "创建时间",
       cell: ({ row }) => (
-        <div className="text-muted-foreground">{formatDate(row.original.createdAt)}</div>
+        <div className="text-muted-foreground">{formatProjectDate(row.original.createdAt)}</div>
       ),
     },
     {
@@ -668,7 +657,7 @@ function QuoteProjectPreview({ project }: { project: QuoteProject }) {
         <SummaryTile label="客户" value={project.customer || "-"} />
         <SummaryTile label="报价金额" value={project.quoteAmount ? money(project.quoteAmount) : "待生成"} />
         <SummaryTile label="报价版本" value="当前草稿" />
-        <SummaryTile label="创建时间" value={formatDate(project.createdAt)} />
+        <SummaryTile label="创建时间" value={formatProjectDate(project.createdAt)} />
       </div>
 
       <div className="flex flex-col gap-2">
@@ -683,19 +672,6 @@ function QuoteProjectPreview({ project }: { project: QuoteProject }) {
   )
 }
 
-function formatDate(value: string | undefined) {
-  if (!value) return "-"
-
-  const date = new Date(value)
-
-  if (!Number.isFinite(date.getTime())) return "-"
-
-  return new Intl.DateTimeFormat("zh-CN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date)
-}
 
 function QuotePrintDocument({
   deliveryVersion,
@@ -861,13 +837,13 @@ function QuoteGroup({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>产品</TableHead>
-            <TableHead className="w-36">{"\u623f\u95f4"}</TableHead>
-            <TableHead className="w-16">数量</TableHead>
-            <TableHead className="w-28">{"\u5355\u4ef7"}</TableHead>
-            <TableHead className="w-20">折扣</TableHead>
+            <TableHead className="w-52">产品</TableHead>
+            <TableHead className="w-28">{"\u623f\u95f4"}</TableHead>
+            <TableHead className="w-14">数量</TableHead>
+            <TableHead className="w-24">{"\u5355\u4ef7"}</TableHead>
+            <TableHead className="w-16">折扣</TableHead>
             <TableHead className="text-right">小计</TableHead>
-            <TableHead className="quote-print-hidden w-12" />
+            <TableHead className="quote-print-hidden w-10" />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -881,11 +857,12 @@ function QuoteGroup({
             items.map((item) => (
               <TableRow key={item.lineId}>
                 <TableCell>
-                  <div className="flex min-w-48 items-center gap-3">
+                  <div className="flex w-52 items-center gap-3 whitespace-normal">
                     <ProductThumb product={item} />
-                    <div>
-                      <div className="font-medium">{item.name}</div>
-                      <div className="text-xs text-muted-foreground" title={quoteVerification(item).reasons.join("；")}>{quoteVerificationLabel(item)}</div>
+                    <div className="min-w-0">
+                      {/* 表格单元格默认 nowrap，长名称会压到「房间」列；这里最多两行并省略。 */}
+                      <div className="line-clamp-2 font-medium" title={item.name}>{item.name}</div>
+                      <div className="truncate text-xs text-muted-foreground" title={quoteVerification(item).reasons.join("；")}>{quoteVerificationLabel(item)}</div>
                       <div className="quote-print-value hidden text-xs text-muted-foreground">{quoteDisplaySpec(item.spec, item.name)}</div>
                     </div>
                   </div>
@@ -895,7 +872,7 @@ function QuoteGroup({
                     value={item.room}
                     onValueChange={(value) => onUpdate(item.lineId, { room: value })}
                   >
-                    <SelectTrigger className="quote-print-hidden h-8 w-36">
+                    <SelectTrigger className="quote-print-hidden h-8 w-28">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -913,7 +890,7 @@ function QuoteGroup({
                     <span className="quote-print-hidden inline-block w-16 px-2 text-right text-sm" title="数量由点位决定，删除点位即可减少">{item.quantity}</span>
                   ) : (
                     <Input
-                      className="quote-print-hidden h-8 w-16 px-2 text-right"
+                      className="quote-print-hidden h-8 w-14 px-2 text-right"
                       min={1}
                       type="number"
                       value={item.quantity}
@@ -940,7 +917,7 @@ function QuoteGroup({
                 </TableCell>
                 <TableCell>
                   <Input
-                    className="quote-print-hidden h-8 w-20 px-2 text-right"
+                    className="quote-print-hidden h-8 w-16 px-2 text-right"
                     min={0}
                     max={100}
                     type="number"
@@ -1226,19 +1203,6 @@ function RoomNameEditor({
   )
 }
 
-function SummaryCard({ label, value }: { label: string; value: string }) {
-  return (
-    <Card className="quote-print-card">
-      <CardContent className="flex items-center justify-between gap-3 p-4">
-        <div>
-          <div className="text-sm text-muted-foreground">{label}</div>
-          <div className="text-xl font-semibold">{value}</div>
-        </div>
-        <Badge variant="secondary">报价</Badge>
-      </CardContent>
-    </Card>
-  )
-}
 
 function InfoBlock({ label, value }: { label: string; value: React.ReactNode }) {
   return (

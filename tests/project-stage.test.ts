@@ -35,44 +35,10 @@ describe("resolveProjectStage", () => {
     })
   })
 
-  it("moves active work orders ahead of contract facts and ignores canceled work orders", () => {
-    expect(
-      resolveProjectStage({
-        hasContract: true,
-        workOrders: [{ status: "dispatching" }],
-      }),
-    ).toMatchObject({
-      stage: "install",
-      statusLabel: "待派工",
-    })
-
-    expect(
-      resolveProjectStage({
-        hasContract: true,
-        workOrders: [{ status: "canceled" }],
-      }),
-    ).toMatchObject({
-      stage: "contract",
-      statusLabel: "待开工",
-    })
-  })
-
-  it("moves to acceptance when all effective work orders are done", () => {
-    expect(
-      resolveProjectStage({
-        workOrders: [{ status: "done" }, { status: "canceled" }],
-      }),
-    ).toMatchObject({
-      stage: "acceptance",
-      statusLabel: "待验收",
-    })
-  })
-
   it("moves accepted delivery projects to aftercare", () => {
     expect(
       resolveProjectStage({
         hasAcceptedDelivery: true,
-        workOrders: [{ status: "in-progress" }],
       }),
     ).toMatchObject({
       stage: "aftercare",

@@ -28,7 +28,7 @@ import {
 
 import type { AdminProduct, ProductModerationStatus } from "@/lib/product-admin-service"
 import { PlatformRowActionItem, PlatformRowActions } from "@/app/admin/_components/platform-list"
-import { FacetedFilter } from "@/components/work-orders/faceted-filter"
+import { FacetedFilter } from "@/components/common/faceted-filter"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"

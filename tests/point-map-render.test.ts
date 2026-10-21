@@ -308,7 +308,7 @@ describe("point map device symbol export", () => {
       pointsOnly: true,
       productCircles: true,
       strictProductImages: true,
-      products: [{ id: "native-photo", image: "/assets/products/native-photo.png" }],
+      products: [{ id: "native-photo", image: "/placeholder.svg" }],
     })
     const processed = contexts.find((context) => context.committed.length > 0)
     expect(processed, "the matte must be written to a drawable canvas rather than silently falling back").toBeDefined()
@@ -364,7 +364,7 @@ describe("point map device symbol export", () => {
   })
 
   it("blocks a customer PDF if a linked photo fails instead of silently printing a category icon", async () => {
-    const broken = "/assets/products/broken.png"
+    const broken = "/placeholder.svg"
     mockDrawing(broken)
     const plan = drawablePlan()
     plan.points[0].productId = "selected-product"

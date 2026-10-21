@@ -8,7 +8,7 @@ import { buildAccountContext } from "../lib/account-context.js"
 import type { AuthUser } from "../lib/auth.js"
 
 const sessionUser: AuthUser = {
-  email: "member@example.com",
+  email: "lynn@example.com",
   name: "Lynn",
   phone: null,
   role: "member",

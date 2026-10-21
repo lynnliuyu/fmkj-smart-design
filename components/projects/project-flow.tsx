@@ -17,11 +17,20 @@ import {
   MoreHorizontal,
   Plus,
   RefreshCw,
-  Search,
   ShieldAlert,
 } from "lucide-react"
 import { toast } from "sonner"
 
+import { ProjectListHeader, ProjectSearchInput } from "@/components/business/project-list-shell"
+import { StatStrip } from "@/components/business/summary-tile"
+import {
+  PROJECT_STAGE_LABELS,
+  fetchProjectListRows,
+  formatProjectDate,
+  isProjectListRow,
+  projectListErrorMessage,
+  projectMatchesQuery,
+} from "@/lib/project-list"
 import { AdminDataTable } from "@/components/data-table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -43,15 +52,13 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   createProjectClient,
-  listProjectsClient,
   ProjectWorkflowClientError,
 } from "@/lib/project-workflow-client"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { groupProjectWorkbenchProjects } from "@/lib/project-workbench"
 import type { ProjectWaitingOn } from "@/lib/project-workbench"
-import { cn } from "@/lib/utils"
 
 type StageKey = "new" | "measure" | "proposal" | "contract" | "install" | "acceptance" | "aftercare"
 type Risk = "normal" | "watch" | "blocked"
@@ -149,49 +156,49 @@ const text = {
 const stages: Stage[] = [
   {
     key: "new",
-    label: "\u65b0\u5efa\u8ddf\u8fdb",
+    label: PROJECT_STAGE_LABELS.new,
     icon: ClipboardList,
     progress: 5,
     deliverables: ["\u5ba2\u6237\u4fe1\u606f", "\u6237\u578b\u8d44\u6599", "\u9884\u7b97\u8303\u56f4", "\u9700\u6c42\u8bb0\u5f55"],
   },
   {
     key: "measure",
-    label: "\u73b0\u573a\u6d4b\u91cf",
+    label: PROJECT_STAGE_LABELS.measure,
     icon: Home,
     progress: 14,
     deliverables: ["\u73b0\u573a\u5c3a\u5bf8", "\u7f51\u7edc\u70b9\u4f4d", "\u5b89\u88c5\u6761\u4ef6", "\u6d4b\u91cf\u8bb0\u5f55"],
   },
   {
     key: "proposal",
-    label: "\u65b9\u6848\u62a5\u4ef7",
+    label: PROJECT_STAGE_LABELS.proposal,
     icon: FileText,
     progress: 28,
     deliverables: ["\u5ba2\u6237\u9700\u6c42", "\u70b9\u4f4d\u6e05\u5355", "\u4ea7\u54c1\u9009\u578b", "\u62a5\u4ef7\u8349\u7a3f"],
   },
   {
     key: "contract",
-    label: "\u5408\u540c\u6536\u6b3e",
+    label: PROJECT_STAGE_LABELS.contract,
     icon: FileCheck2,
     progress: 48,
     deliverables: ["\u786e\u8ba4\u62a5\u4ef7", "\u5408\u540c\u8349\u7a3f", "\u6536\u6b3e\u8282\u70b9", "\u7b7e\u7ea6\u8bb0\u5f55"],
   },
   {
     key: "install",
-    label: "\u5b89\u88c5\u8c03\u8bd5",
+    label: PROJECT_STAGE_LABELS.install,
     icon: Hammer,
     progress: 68,
     deliverables: ["\u65bd\u5de5\u5de5\u5355", "\u8bbe\u5907\u5230\u8d27", "\u73b0\u573a\u53d8\u66f4", "\u8c03\u8bd5\u8bb0\u5f55"],
   },
   {
     key: "acceptance",
-    label: "\u4ea4\u4ed8\u9a8c\u6536",
+    label: PROJECT_STAGE_LABELS.acceptance,
     icon: CheckCircle2,
     progress: 88,
     deliverables: ["\u9a8c\u6536\u6e05\u5355", "\u4ea4\u4ed8\u8d44\u6599", "\u5ba2\u6237\u7b7e\u6536", "\u589e\u8865\u786e\u8ba4"],
   },
   {
     key: "aftercare",
-    label: "\u552e\u540e\u7ef4\u62a4",
+    label: PROJECT_STAGE_LABELS.aftercare,
     icon: HeartHandshake,
     progress: 100,
     deliverables: ["\u56de\u8bbf\u8bb0\u5f55", "\u552e\u540e\u5de5\u5355", "\u4fdd\u4fee\u8d44\u6599", "\u590d\u8d2d\u7ebf\u7d22"],
@@ -223,7 +230,7 @@ export function ProjectFlow() {
       setIsLoadingProjects(true)
       setProjectLoadError("")
       try {
-        const nextProjects = (await listProjectsClient<Project>()).filter(isProject)
+        const nextProjects = await fetchProjectListRows<Project>()
 
         if (active) {
           setProjects(nextProjects)
@@ -231,11 +238,7 @@ export function ProjectFlow() {
       } catch (error) {
         if (!active) return
         setProjectLoadError(
-          error instanceof ProjectWorkflowClientError && error.status === 401
-            ? "登录已失效，请重新登录后重试。"
-            : error instanceof ProjectWorkflowClientError && error.status === 403
-              ? "当前账号没有读取项目列表的权限，请核对登录账号。"
-              : "项目列表读取失败，请确认工作站服务已启动后重试。",
+          projectListErrorMessage(error, "项目列表读取失败，请确认工作站服务已启动后重试。"),
         )
       } finally {
         if (active) setIsLoadingProjects(false)
@@ -265,8 +268,8 @@ export function ProjectFlow() {
     }
   }
 
-  const filteredProjects = projects.filter((project) => {
-    const haystack = [
+  const filteredProjects = projects.filter((project) =>
+    projectMatchesQuery(query, [
       project.name,
       project.code,
       project.customer,
@@ -276,12 +279,8 @@ export function ProjectFlow() {
       project.nextActionOwnerName,
       project.designer,
       ...project.tags,
-    ]
-      .join(" ")
-      .toLowerCase()
-
-    return haystack.includes(query.trim().toLowerCase())
-  })
+    ]),
+  )
   const groupedProjects = groupProjectWorkbenchProjects(
     filteredProjects.map((project) => ({
       ...project,
@@ -322,9 +321,9 @@ export function ProjectFlow() {
 
   return (
     <section className="flex flex-col gap-5">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">{text.title}</h1>
-        <CreateProjectDialog
+      <ProjectListHeader
+        title={text.title}
+        actions={<CreateProjectDialog
           key={isCreateOpen ? "open" : "closed"}
           error={createError}
           creating={isCreating}
@@ -336,15 +335,17 @@ export function ProjectFlow() {
             if (open) void loadProjectOptions()
           }}
           onCreate={createProject}
-        />
-      </div>
+        />}
+      />
 
-      <div className="grid gap-3 md:grid-cols-4">
-        <MetricCard label={text.total} value={projects.length} />
-        <MetricCard label={text.risks} value={groupedProjects.risk.length} tone="warn" />
-        <MetricCard label={text.upcoming} value={groupedProjects.upcoming.length} />
-        <MetricCard label={text.waiting} value={groupedProjects.waiting.length} />
-      </div>
+      <StatStrip
+        items={[
+          { label: text.total, value: projects.length },
+          { label: text.risks, value: groupedProjects.risk.length, tone: groupedProjects.risk.length > 0 ? "warn" : "default" },
+          { label: text.upcoming, value: groupedProjects.upcoming.length },
+          { label: text.waiting, value: groupedProjects.waiting.length },
+        ]}
+      />
 
       <Card>
         <CardHeader>
@@ -355,15 +356,12 @@ export function ProjectFlow() {
                 {text.workbench}
               </CardTitle>
             </div>
-            <div className="relative w-full lg:max-w-md">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={text.search}
-                className="h-9 pl-9"
-              />
-            </div>
+            <ProjectSearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder={text.search}
+              size="md"
+            />
           </div>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -756,19 +754,28 @@ const projectColumns: ColumnDef<Project>[] = [
   {
     accessorKey: "stage",
     header: "状态",
-    cell: ({ row }) => (
-      <div className="flex flex-wrap items-center gap-1.5">
-        <Badge variant="outline">{getStage(row.original.stage).label}</Badge>
-        {row.original.stageStatusLabel ? <Badge variant="secondary">{row.original.stageStatusLabel}</Badge> : null}
-        <Badge variant="secondary">{waitingOnLabel(row.original.waitingOn)}</Badge>
-      </div>
-    ),
+    cell: ({ row }) => {
+      const stageLabel = getStage(row.original.stage).label
+      const statusLabel = row.original.stageStatusLabel?.trim()
+
+      return (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge variant="outline">{stageLabel}</Badge>
+          {/* 阶段名与状态名经常是同一句话，重复时不显示第二个徽标。 */}
+          {statusLabel && statusLabel !== stageLabel ? <Badge variant="secondary">{statusLabel}</Badge> : null}
+          {/* 「未等待」是默认值，不占位。 */}
+          {row.original.waitingOn && row.original.waitingOn !== "none" ? (
+            <Badge variant="secondary">{waitingOnLabel(row.original.waitingOn)}</Badge>
+          ) : null}
+        </div>
+      )
+    },
   },
   {
     accessorKey: "createdAt",
     header: "创建时间",
     cell: ({ row }) => (
-      <div className="text-right text-muted-foreground">{formatDate(row.original.createdAt)}</div>
+      <div className="text-right text-muted-foreground">{formatProjectDate(row.original.createdAt)}</div>
     ),
   },
   {
@@ -820,16 +827,6 @@ function ProjectRowActions({ project }: { project: Project }) {
   )
 }
 
-function MetricCard({ label, value, tone = "default" }: { label: string; value: number; tone?: "default" | "warn" }) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="text-xs text-muted-foreground">{label}</div>
-        <div className={cn("mt-1 text-2xl font-semibold", tone === "warn" && "text-destructive")}>{value}</div>
-      </CardContent>
-    </Card>
-  )
-}
 
 function RiskBadge({ risk }: { risk: Risk }) {
   if (risk === "blocked") {
@@ -853,25 +850,11 @@ function waitingOnLabel(waitingOn: Project["waitingOn"]) {
   return "未等待"
 }
 
-function formatDate(value: string | undefined) {
-  if (!value) return "-"
-
-  const date = new Date(value)
-
-  if (!Number.isFinite(date.getTime())) return "-"
-
-  return new Intl.DateTimeFormat("zh-CN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date)
-}
 
 function isProject(project: Project | undefined): project is Project {
-  return Boolean(project?.id && project.name && getStage(project.stage))
+  return isProjectListRow(project)
 }
 
 function getStage(key: StageKey) {
   return stages.find((stage) => stage.key === key) ?? stages[0]
 }
-

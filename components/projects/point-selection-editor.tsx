@@ -18,18 +18,15 @@ const valueNames: Record<string, string> = {
 };
 
 /** Requirements and purchasing intent are separate from the drawing review status. */
-export function PointSelectionEditor({ point, products, readOnly = false, historical = false, onPatch }: {
+export function PointSelectionEditor({ point, products, readOnly = false, onPatch }: {
   point: PointMapNode;
   products: SelectionProduct[];
   readOnly?: boolean;
-  historical?: boolean;
   onPatch: (patch: Partial<PointMapNode>) => void;
 }) {
   const id = React.useId();
   const type = findDeviceType(point.deviceTypeId);
-  const candidateProducts: SelectionProduct[] = historical && point.selection ? [{
-    ...point.selection, id: point.selection.productId, status: "active", catalogKind: "sku", selectionStatus: "verified", selectionEvidence: "历史选型快照",
-  }] : products;
+  const candidateProducts: SelectionProduct[] = products;
   const candidates = candidateProducts.map((product) => ({ product, result: evaluateProductCompatibility(point, product) }));
   const current = candidates.find(({ product }) => product.id === point.productId);
   const staleSelection = Boolean(current && point.selection && (point.selection.productId !== current.product.id || point.selection.mappingRevision !== current.product.mappingRevision));
@@ -57,7 +54,7 @@ export function PointSelectionEditor({ point, products, readOnly = false, histor
     }} />}</div>)}</div>}
     <div className="grid gap-2"><Label>选用状态</Label><Select value={point.usage ?? "proposed"} disabled={readOnly} onValueChange={(value) => onPatch({ usage: value as PointMapNode["usage"] })}><SelectTrigger aria-label="选用状态"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(usageNames).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select><p className="text-xs text-muted-foreground">待评估和预留点位保留在图上，不计入采购。</p></div>
     <div className="grid gap-2"><Label>关联具体型号</Label><Select value={point.productId || "none"} disabled={readOnly || !type} onValueChange={(value) => onPatch({ productId: value === "none" ? "" : value, selection: undefined, ...(value !== "none" ? { usage: "selected" as const } : {}) })}><SelectTrigger aria-label="关联产品"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">暂不关联产品</SelectItem>{point.productId && !compatible.some(({ product }) => product.id === point.productId) && <SelectItem value={point.productId}>当前关联：{current?.product.name ?? point.productId}（待处理）</SelectItem>}{compatible.map(({ product }) => <SelectItem key={product.id} value={product.id}>{product.name}{product.manufacturerModel ? ` · ${product.manufacturerModel}` : ""}</SelectItem>)}</SelectContent></Select>
-      {!type && <p className="text-xs text-muted-foreground">{historical ? "旧版资料尚无设备类型或选型快照；保留原图，不能视为已核采购规格。" : "先确定设备类型，再筛选具体型号。旧单开占位图标不会自动确定为一键。"}</p>}
+      {!type && <p className="text-xs text-muted-foreground">先确定设备类型，再筛选具体型号。旧单开占位图标不会自动确定为一键。</p>}
       {type && !compatible.length && <p className="text-xs text-muted-foreground">暂无已核实兼容型号，可继续保存和确认布局。</p>}
       {current && current.result.status !== "compatible" && <p role="status" className="text-xs leading-5 text-destructive">当前关联{current.result.status === "incomplete" ? "资料不足" : "不兼容"}：{current.result.reasons.join("；")}。原关联保留，需重新选择。</p>}
       {point.productId && !current && <p role="status" className="text-xs text-destructive">当前产品不可用，请重新选择型号。</p>}

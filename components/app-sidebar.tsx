@@ -4,9 +4,8 @@ import { useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import {
   ChevronsUpDown,
-  ClipboardCheck,
   Command,
-  Headset,
+  FolderKanban,
   LayoutDashboard,
   LogOut,
   PackageSearch,
@@ -41,9 +40,8 @@ import {
 } from "@/components/ui/sidebar"
 
 const navGeneral = [
-  { icon: LayoutDashboard, label: "项目", url: "/" },
-  { icon: ClipboardCheck, label: "工单", url: "/work-orders" },
-  { icon: Headset, label: "售后", url: "/aftercare" },
+  { icon: LayoutDashboard, label: "概览", url: "/" },
+  { icon: FolderKanban, label: "项目", url: "/projects" },
   { icon: PackageSearch, label: "产品库", url: "/products" },
 ]
 

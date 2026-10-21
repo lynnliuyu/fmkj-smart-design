@@ -49,8 +49,7 @@ node --input-type=module -e 'const {deviceTypes}=await import("./lib/device-type
 
 # 生成只读的旧产品分类整理模板；先创建输出目录。
 mkdir -p .local/product-catalog-collection
-# Historical one-off review script is excluded from the public candidate.
-# Use the authenticated product administration UI for review and updates.
+node --env-file=.env.local scripts/review-product-mapping.mjs audit --out .local/product-catalog-collection/classification-review.json
 ```
 
 真实库清单使用管理员接口。普通 `/api/products` 在连接失败等情况下可能返回演示 fallback，不能据此判断真实存量或已入库；401/403 则按已有账号登录和权限处理，不能修改鉴权来绕过。
@@ -208,8 +207,7 @@ API 当前会将遗漏的新产品价格/成本/库存默认为 0。新产品没
 仅整理旧记录的 `catalogKind`、`deviceTypeId`、`manufacturerModel` 时，可使用第 1 步生成的分类变更集，填写 `after` 和真实原因，再执行：
 
 ```sh
-# Historical one-off review script is excluded from the public candidate.
-# Use the authenticated product administration UI for review and updates.
+node --env-file=.env.local scripts/review-product-mapping.mjs apply --changes .local/product-catalog-collection/classification-review.json --actor EXISTING_ADMIN_UUID
 ```
 
 此 CLI 要求已有有效管理员 UUID；它**不会新增 SKU，也不写 specs、协议、能力或价格**，执行后参数和价格保持待核。同一变更 ID 可去重；需要撤回这类分类变更时，用 `rollback --change-id ... --actor ...`，它会检查并发。API 的其他新增/修改不享有这个 CLI 的整批回退能力，应保存各自前后记录并按业务入口处理。

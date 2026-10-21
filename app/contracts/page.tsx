@@ -1,3 +1,5 @@
+import { Suspense } from "react"
+
 import { AppSidebar } from "@/components/app-sidebar"
 import { ContractsWorkbench } from "@/components/contracts/contracts-workbench"
 import { SiteHeader } from "@/components/site-header"
@@ -10,7 +12,9 @@ export default function ContractsPage() {
       <SidebarInset>
         <SiteHeader />
         <main className="flex flex-1 flex-col gap-6 p-4 md:p-8">
-          <ContractsWorkbench />
+          <Suspense fallback={null}>
+            <ContractsWorkbench />
+          </Suspense>
         </main>
       </SidebarInset>
     </SidebarProvider>

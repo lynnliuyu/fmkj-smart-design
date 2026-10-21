@@ -1,0 +1,3 @@
+# HTTP service uses the existing exporter, including readable/merged PDF output.
+-r render-requirements.txt
+pypdf==6.10.0

@@ -8,7 +8,7 @@ import {
 import type { AuthUser } from "../lib/auth.js"
 
 const sessionUser: AuthUser = {
-  email: "member@example.com",
+  email: "lynn@example.com",
   name: "Lynn",
   phone: null,
   role: "member",
@@ -19,7 +19,7 @@ describe("account context", () => {
   it("maps platform admin roles to super admin context", () => {
     const context = buildAccountContext(sessionUser, {
       id: "user_1",
-      email: "member@example.com",
+      email: "lynn@example.com",
       name: "Lynn",
       role: "admin",
       status: "active",

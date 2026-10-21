@@ -70,4 +70,40 @@ describe("durable local drafts with deduplicated image assets", () => {
     (repo.records.get("fmkj:point-map:one") as unknown as { version: number }).version = 2;
     await expect(store.read("one")).rejects.toThrow(/版本或项目不符/);
   });
+
+  it("re-encodes the floorplan only once across repeated edits", async () => {
+    const repo = repository(), store = createPointMapLocalStore(repo);
+    const blobs: Blob[] = [];
+    const persist = repo.write.bind(repo);
+    repo.write = async (record, assets) => {
+      for (const asset of assets) blobs.push(asset.blob);
+      return persist(record, assets);
+    };
+    const base = plan();
+    await store.write(base);
+    await store.write({ ...base, floorplanName: "second" });
+    await store.write({ ...base, floorplanName: "third" });
+    expect(blobs).toHaveLength(3);
+    // 同一张底图复用同一份打包结果，而不是每次编辑都重新 base64 解码 + 编码 + 哈希。
+    expect(blobs[1]).toBe(blobs[0]);
+    expect(blobs[2]).toBe(blobs[1]);
+  });
+
+  it("coalesces superseded writes so rapid edits cost one durable write", async () => {
+    const repo = repository(), store = createPointMapLocalStore(repo);
+    let durableWrites = 0;
+    const persist = repo.write.bind(repo);
+    repo.write = async (record, assets) => {
+      durableWrites += 1;
+      return persist(record, assets);
+    };
+    const base = plan();
+    const edits = Array.from({ length: 20 }, (_, index) => ({
+      ...base,
+      floors: base.floors!.map((floor) => ({ ...floor, name: `edit-${index}` })),
+    }));
+    await Promise.all(edits.map((value) => store.write(value)));
+    expect(durableWrites).toBe(1);
+    expect((await store.read("one"))!.plan.floors![0].name).toBe("edit-19");
+  });
 });

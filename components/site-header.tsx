@@ -2,11 +2,12 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
 import { Bell, Languages, Menu, Monitor, Moon, SearchIcon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
 
 import { useI18n } from "@/lib/i18n"
+import { buildWorkbenchNav, showsWorkbenchNav } from "@/lib/workbench-nav"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -22,18 +23,11 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Kbd } from "@/components/ui/kbd"
 
-const headerNav = [
-  { title: "概览", href: "/" },
-  { title: "项目", href: "/projects" },
-  { title: "方案报价", href: "/quotes" },
-  { title: "合同", href: "/contracts" },
-]
-
 export function SiteHeader() {
   const pathname = usePathname()
   const { locale, setLocale, t } = useI18n()
   const [offset, setOffset] = React.useState(0)
-  const showWorkbenchNav = isWorkbenchPath(pathname)
+  const showWorkbenchNav = showsWorkbenchNav(pathname)
 
   React.useEffect(() => {
     function onScroll() {
@@ -56,7 +50,11 @@ export function SiteHeader() {
       >
         <SidebarTrigger variant="outline" className="max-md:scale-125" />
         <Separator orientation="vertical" className="h-6" />
-        {showWorkbenchNav ? <TopNav pathname={pathname} /> : null}
+        {showWorkbenchNav ? (
+          <React.Suspense fallback={null}>
+            <TopNav pathname={pathname} />
+          </React.Suspense>
+        ) : null}
         <div className="ml-auto flex min-w-0 items-center gap-1">
           <SearchButton placeholder={t("header.search")} />
           <DropdownMenu>
@@ -94,16 +92,11 @@ export function SiteHeader() {
   )
 }
 
-function isActivePath(pathname: string, href: string) {
-  if (href === "/") return pathname === "/"
-  return pathname.startsWith(href)
-}
-
-function isWorkbenchPath(pathname: string) {
-  return headerNav.some((item) => isActivePath(pathname, item.href))
-}
-
 function TopNav({ pathname }: { pathname: string }) {
+  const searchParams = useSearchParams()
+  const search = searchParams.toString()
+  const items = React.useMemo(() => buildWorkbenchNav(pathname, search), [pathname, search])
+
   return (
     <>
       <DropdownMenu modal={false}>
@@ -114,9 +107,9 @@ function TopNav({ pathname }: { pathname: string }) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="start">
-          {headerNav.map((item) => (
-            <DropdownMenuItem key={item.href} asChild>
-              <Link href={item.href} className={!isActivePath(pathname, item.href) ? "text-muted-foreground" : ""}>
+          {items.map((item) => (
+            <DropdownMenuItem key={item.key} asChild>
+              <Link href={item.href} className={!item.active ? "text-muted-foreground" : ""}>
                 {item.title}
               </Link>
             </DropdownMenuItem>
@@ -125,13 +118,14 @@ function TopNav({ pathname }: { pathname: string }) {
       </DropdownMenu>
 
       <nav className="mr-auto hidden items-center space-x-4 lg:flex lg:space-x-4 xl:space-x-6">
-        {headerNav.map((item) => (
+        {items.map((item) => (
           <Link
-            key={item.href}
+            key={item.key}
             href={item.href}
+            aria-current={item.active ? "page" : undefined}
             className={cn(
               "text-sm font-medium transition-colors hover:text-primary",
-              !isActivePath(pathname, item.href) && "text-muted-foreground"
+              !item.active && "text-muted-foreground"
             )}
           >
             {item.title}

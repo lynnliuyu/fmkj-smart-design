@@ -15,6 +15,8 @@ Date: 2026-10-15
 
 `pnpm exec vitest run tests/point-map-default-products.test.ts` 在修复前 2 个回归失败：四个默认窗帘使 refreshPointMapQuote 返回 updated=false；未知轨道长度使 blocked=true。修复后通过，同时断言不虚构用料、未报范围可见、正式采购及冲突仍阻塞、原方案不变。
 
-真实数据库同一 r4 预览从 blocked=true / included=29 变成 blocked=false / included=33，33 点全为未核验，procurementReady=false；未改数据库点位以规避规则。随后在用户已登录的真实工作台再次保存未改动方案至 r5，页面确认本机预览 33 台，证明无编辑保存也能重试。进入报价页并保存成功，数据库读回 DEMO-QUOTE-001：¥13,641，22 行 / 33 台 / 33 个来源点位，全部 revision=5、全部未核验，四行保留“配套未计入本次报价”原因。未更改全局默认、原图位置、设计状态和场景，未创建确认版或固定交付版。
+真实数据库同一 r4 预览从 blocked=true / included=29 变成 blocked=false / included=33，33 点全为未核验，procurementReady=false；未改数据库点位以规避规则。随后在用户已登录的真实工作台再次保存未改动方案至 r5，页面确认本机预览 33 台，证明无编辑保存也能重试。进入报价页并保存成功，数据库读回 QT-EXAMPLE-DEMO：¥13,641，22 行 / 33 台 / 33 个来源点位，全部 revision=5、全部未核验，四行保留“配套未计入本次报价”原因。未更改全局默认、原图位置、设计状态和场景，未创建确认版或固定交付版。
 
 80 文件 / 843 测试、typecheck、相关 ESLint、git diff --check 通过。未执行生产构建，也未声称已实际导出两类 PDF；其未报范围显示复用既有共享标签函数。
+
+实际诊断、修复后预览与保存读回指标位于忽略目录 `.local/bangtai-jinghe/compact-v3/` 的 `quote-preview-diagnostics-r4.json`、`quote-preview-after-fix-r4.json`、`saved-quote-r5.json`。r4 替换原稿备份继续保留。

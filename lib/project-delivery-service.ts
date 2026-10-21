@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto"
 import { readFile, realpath, stat } from "node:fs/promises"
 import path from "node:path"
 import type { Pool, PoolClient } from "pg"
+import { LOCAL_FILE_PREFIX, readLocalFile } from "./file-storage"
 import { quoteVerification } from "./quote-verification"
 
 import type { AccountContext } from "./account-context"
@@ -354,6 +355,16 @@ export async function freezeDeliveryImage(source: string, options: { publicDirec
     if (!match || Buffer.byteLength(match[2], "base64") > maxBytes) throw new ProjectDeliveryError("DELIVERY_IMAGE_INVALID", 409, "商品图格式无效或超过大小限制，请使用 PNG/JPEG/WebP 图片。")
     if (!rasterMime(Buffer.from(match[2], "base64"))) throw new ProjectDeliveryError("DELIVERY_IMAGE_INVALID", 409, "商品图数据不是可归档的标准图片。")
     return source
+  }
+  // 本地设备版把上传商品图放在数据卷里，站内路径是 /api/files/<pathname>。
+  // 交付冻结必须能直接读回这些字节，而不是只认 /assets 下的静态文件。
+  if (source.startsWith(LOCAL_FILE_PREFIX)) {
+    const stored = await readLocalFile(source.slice(LOCAL_FILE_PREFIX.length))
+    if (!stored) throw new ProjectDeliveryError("DELIVERY_IMAGE_UNAVAILABLE", 409, "商品图文件无法读取，请重新上传。")
+    if (stored.bytes.byteLength > maxBytes) throw new ProjectDeliveryError("DELIVERY_IMAGE_TOO_LARGE", 413, "商品图超过大小限制，请先压缩。")
+    const storedMime = rasterMime(stored.bytes)
+    if (!storedMime) throw new ProjectDeliveryError("DELIVERY_IMAGE_INVALID", 409, "商品图需要使用 PNG/JPEG/WebP 等标准图片。")
+    return `data:${storedMime};base64,${stored.bytes.toString("base64")}`
   }
   if (!source.startsWith("/assets/") || source.startsWith("//")) throw new ProjectDeliveryError("DELIVERY_IMAGE_ARCHIVE_REQUIRED", 409, "商品图尚未归档；请先把远程图片保存到产品图库，再生成固定版本。")
   let pathname: string

@@ -11,6 +11,8 @@ const db = vi.hoisted(() => {
     memberCount: 0,
     queries: [] as string[],
     planCode: "ENTERPRISE_MONTHLY" as "ENTERPRISE_MONTHLY" | "ENTERPRISE_CUSTOM",
+    organizationExists: true,
+    profileType: "SUPER_ADMIN" as "SUPER_ADMIN" | "ENTERPRISE_OWNER",
   }
 
   function answer(sql: string, params?: unknown[]): QueryResult {
@@ -18,7 +20,17 @@ const db = vi.hoisted(() => {
     state.queries.push(text)
 
     if (text.startsWith("select id::text, name, owner_user_id")) {
+      return state.organizationExists
+        ? { rows: [{ id: "org_1", name: "测试团队", ownerUserId: "user_1" }], rowCount: 1 }
+        : { rows: [], rowCount: 0 }
+    }
+    if (text.startsWith("insert into organizations")) {
+      state.organizationExists = true
       return { rows: [{ id: "org_1", name: "测试团队", ownerUserId: "user_1" }], rowCount: 1 }
+    }
+    if (text.startsWith("update account_profiles")) {
+      if (text.includes("account_type = 'enterprise_owner'")) state.profileType = "ENTERPRISE_OWNER"
+      return { rows: [], rowCount: 1 }
     }
     if (text.startsWith("insert into organization_roles")) {
       return { rows: [{ id: `role_${String(params?.[0] ?? "x")}` }], rowCount: 1 }
@@ -60,13 +72,16 @@ const db = vi.hoisted(() => {
       state.memberCount = 0
       state.queries = []
       state.planCode = "ENTERPRISE_MONTHLY"
+      state.organizationExists = true
+      state.profileType = "SUPER_ADMIN"
     },
   }
 })
 
 vi.mock("@/lib/server-db", () => ({ getPool: () => db.pool, hasDatabaseUrl: () => true }))
 
-import { AccountTeamError, createTeamMember } from "../lib/account-team-service"
+import { AccountTeamError, createTeamMember, getAccountTeam } from "../lib/account-team-service"
+import { projectVisibilityWhere } from "../lib/project-access"
 
 const owner: AuthUser = {
   email: "owner@example.com",
@@ -94,6 +109,29 @@ const enterpriseContext = () =>
 
 beforeEach(() => {
   db.reset()
+})
+
+describe("team initialization", () => {
+  it("preserves super admin identity and project visibility when first creating its team", async () => {
+    db.state.organizationExists = false
+    const admin = { ...owner, role: "admin" }
+    const team = await getAccountTeam(buildAccountContext(admin, {
+      id: admin.userId,
+      role: "admin",
+      account_type: db.state.profileType,
+      account_status: "active",
+    }))
+
+    expect(team.organization?.id).toBe("org_1")
+    const after = buildAccountContext(admin, {
+      id: admin.userId,
+      role: "admin",
+      account_type: db.state.profileType,
+      account_status: "active",
+    })
+    expect(after.account.isSuperAdmin).toBe(true)
+    expect(projectVisibilityWhere(after).where).toBe("true")
+  })
 })
 
 describe("team member creation", () => {

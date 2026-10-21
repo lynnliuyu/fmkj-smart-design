@@ -4,15 +4,14 @@ import Image from "next/image";
 import { isSvgImage } from "@/lib/image-src";
 import * as React from "react";
 import {
-  Boxes,
   Check,
   CircleDollarSign,
   Copy,
   FileSpreadsheet,
   Grid2X2,
-  Layers3,
   List,
   Loader2,
+  MoreHorizontal,
   PackageCheck,
   Plus,
   Search,
@@ -23,6 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { StatStrip } from "@/components/business/summary-tile";
 import { ManagementBar } from "@/components/animate-ui/management-bar";
 import { ProductPointBadge, ProductPointFilters } from "@/components/products/product-point-filters";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +41,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -94,6 +100,9 @@ type Facet = {
   type: "platform" | "brand" | "category" | "tag";
 };
 
+/** 每页产品数：足够一屏浏览，又不会一次渲染上千张卡。 */
+const PRODUCT_PAGE_SIZE = 24;
+
 export function ProductLibrary({
   canManageProducts = false,
 }: {
@@ -107,6 +116,11 @@ export function ProductLibrary({
   const [pointFilter, setPointFilter] = React.useState(ALL_POINT_PRODUCTS);
   const [query, setQuery] = React.useState("");
   const [searchTerm, setSearchTerm] = React.useState("");
+  // 产品库目前有 700+ 条记录，全部渲染会让页面超过 10 万像素；按页渲染。
+  const [pageSize, setPageSize] = React.useState(PRODUCT_PAGE_SIZE);
+  const [pageSelection, setPageSelection] = React.useState({ key: "", index: 0 });
+  // 产品库的 facet 与设备图标一共 90 多个 chip，默认只露出平台，其余按需展开。
+  const [showAllFilters, setShowAllFilters] = React.useState(false);
   const isComposingRef = React.useRef(false);
   const [selectedProduct, setSelectedProduct] = React.useState<Product | null>(
     null,
@@ -198,6 +212,24 @@ export function ProductLibrary({
   const filteredProducts = React.useMemo(
     () => catalogFilteredProducts.filter((product) => matchesProductPointFilter(product, pointFilter)),
     [catalogFilteredProducts, pointFilter],
+  );
+
+  // 筛选条件或每页条数一变就回到第一页：用 key 比较，避免在 effect 里 setState。
+  const filterKey = `${facet?.type ?? ""}:${facet?.value ?? ""}|${pointFilter.category}|${pointFilter.iconId}|${searchTerm}|${pageSize}`;
+  const requestedPage = pageSelection.key === filterKey ? pageSelection.index : 0;
+  const pageCount = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
+  const safePageIndex = Math.min(requestedPage, pageCount - 1);
+  const pagedProducts = React.useMemo(
+    () =>
+      filteredProducts.slice(
+        safePageIndex * pageSize,
+        safePageIndex * pageSize + pageSize,
+      ),
+    [filteredProducts, pageSize, safePageIndex],
+  );
+  const changePage = React.useCallback(
+    (index: number) => setPageSelection({ key: filterKey, index }),
+    [filterKey],
   );
 
   const selectedProducts = React.useMemo(
@@ -328,32 +360,14 @@ export function ProductLibrary({
 
   return (
     <section className="flex flex-col gap-5">
-      <div className="grid gap-3 md:grid-cols-4">
-        <MetricCard
-          icon={Boxes}
-          label="产品"
-          value={`${summary.products}`}
-          description="可报价记录"
-        />
-        <MetricCard
-          icon={PackageCheck}
-          label="品牌"
-          value={`${summary.brands}`}
-          description="brand 维度"
-        />
-        <MetricCard
-          icon={Layers3}
-          label="平台"
-          value={`${summary.platforms}`}
-          description="米家 / Aqara / 通用"
-        />
-        <MetricCard
-          icon={Tags}
-          label="分类"
-          value={`${summary.categories}`}
-          description="面板、开关、传感器等"
-        />
-      </div>
+      <StatStrip
+        items={[
+          { label: "产品", value: summary.products },
+          { label: "品牌", value: summary.brands },
+          { label: "平台", value: summary.platforms },
+          { label: "分类", value: summary.categories },
+        ]}
+      />
 
       <Card>
         <CardHeader className="gap-4">
@@ -408,21 +422,38 @@ export function ProductLibrary({
               activeFacet={facet}
               onChange={setFacet}
             />
-            <FacetRow
-              label="品牌"
-              type="brand"
-              values={brands}
-              activeFacet={facet}
-              onChange={setFacet}
-            />
-            <FacetRow
-              label="分类"
-              type="category"
-              values={categories}
-              activeFacet={facet}
-              onChange={setFacet}
-            />
-            <ProductPointFilters products={catalogFilteredProducts} value={pointFilter} onChange={setPointFilter} />
+            <div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="px-0"
+                aria-expanded={showAllFilters}
+                onClick={() => setShowAllFilters((value) => !value)}
+              >
+                <SlidersHorizontal className="size-4" />
+                {showAllFilters ? "收起筛选" : "更多筛选 · 品牌 / 分类 / 点位图 / 设备图标"}
+              </Button>
+            </div>
+            {showAllFilters ? (
+              <>
+                <FacetRow
+                  label="品牌"
+                  type="brand"
+                  values={brands}
+                  activeFacet={facet}
+                  onChange={setFacet}
+                />
+                <FacetRow
+                  label="分类"
+                  type="category"
+                  values={categories}
+                  activeFacet={facet}
+                  onChange={setFacet}
+                />
+                <ProductPointFilters products={catalogFilteredProducts} value={pointFilter} onChange={setPointFilter} />
+              </>
+            ) : null}
           </div>
         </CardHeader>
       </Card>
@@ -493,7 +524,7 @@ export function ProductLibrary({
             <ProductGridSkeleton />
           ) : filteredProducts.length ? (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {filteredProducts.map((product) => (
+              {pagedProducts.map((product) => (
                 <ProductCard
                   key={product.id ?? product.sku}
                   product={product}
@@ -528,7 +559,7 @@ export function ProductLibrary({
                 </TableHeader>
                 <TableBody>
                   {!isLoadingProducts &&
-                    filteredProducts.map((product) => (
+                    pagedProducts.map((product) => (
                       <TableRow
                         key={product.id ?? product.sku}
                         className="cursor-pointer"
@@ -643,6 +674,15 @@ export function ProductLibrary({
             </CardContent>
           </Card>
         </TabsContent>
+
+        <ProductPager
+          pageCount={pageCount}
+          pageIndex={safePageIndex}
+          pageSize={pageSize}
+          total={filteredProducts.length}
+          onPageChange={changePage}
+          onPageSizeChange={setPageSize}
+        />
       </Tabs>
 
       <ProductDetailDialog
@@ -673,33 +713,6 @@ export function ProductLibrary({
   );
 }
 
-function MetricCard({
-  icon: Icon,
-  label,
-  value,
-  description,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string;
-  description: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="flex items-center gap-3 p-4">
-        <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Icon className="size-4" />
-        </div>
-        <div>
-          <div className="text-xl font-semibold tabular-nums">{value}</div>
-          <div className="text-xs text-muted-foreground">
-            {label} · {description}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 function FacetRow({
   label,
@@ -810,44 +823,124 @@ function ProductCard({
           </div>
           <StockBadge product={product} />
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap gap-2">
-            {canManage && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={duplicating}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onDuplicate();
-                }}
-              >
-                {duplicating ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Copy className="size-4" />
-                )}
-                复制
-              </Button>
-            )}
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={(event) => {
-                event.stopPropagation();
-                onAddToQuote();
-              }}
-            >
-              <Plus className="size-4" />
-              加入
-            </Button>
-          </div>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            onClick={(event) => {
+              event.stopPropagation();
+              onAddToQuote();
+            }}
+          >
+            <Plus className="size-4" />
+            加入报价
+          </Button>
+          {canManage ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={`${product.name} 更多操作`}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem disabled={duplicating} onSelect={onDuplicate}>
+                  {duplicating ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Copy className="size-4" />
+                  )}
+                  复制产品
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
         </div>
         <TagList tags={product.tags} />
       </div>
     </Card>
+  );
+}
+
+function ProductPager({
+  pageCount,
+  pageIndex,
+  pageSize,
+  total,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  pageCount: number;
+  pageIndex: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (pageIndex: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+      <span className="text-muted-foreground">
+        共 {total} 个产品 · 第 {pageIndex + 1} / {pageCount} 页
+      </span>
+      <div className="flex flex-wrap items-center gap-2">
+        <Select
+          value={`${pageSize}`}
+          onValueChange={(value) => onPageSizeChange(Number(value))}
+        >
+          <SelectTrigger className="h-8 w-24" aria-label="每页产品数">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent side="top">
+            {[24, 48, 96].map((size) => (
+              <SelectItem key={size} value={`${size}`}>
+                {size} / 页
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={pageIndex === 0}
+          onClick={() => onPageChange(0)}
+        >
+          首页
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={pageIndex === 0}
+          onClick={() => onPageChange(pageIndex - 1)}
+        >
+          上一页
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={pageIndex >= pageCount - 1}
+          onClick={() => onPageChange(pageIndex + 1)}
+        >
+          下一页
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={pageIndex >= pageCount - 1}
+          onClick={() => onPageChange(pageCount - 1)}
+        >
+          末页
+        </Button>
+      </div>
+    </div>
   );
 }
 

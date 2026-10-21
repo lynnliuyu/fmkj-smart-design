@@ -7,8 +7,8 @@ import { promisify } from "node:util"
 const execFileAsync = promisify(execFile)
 
 const root = process.cwd()
-const expectedRepo = process.env.EXPECTED_GITHUB_REPO || ""
-
+const expectedRepo = "lynnliuyu/fmkj-smart-design"
+const expectedPathSuffix = path.join("Documents", "ChatGPT", "繁梦空间设计站")
 
 const checks = []
 
@@ -48,6 +48,12 @@ async function git(args) {
 }
 
 async function checkWorkspace() {
+  if (root.endsWith(expectedPathSuffix)) {
+    pass("workspace path", root)
+  } else {
+    warn("workspace path", `Current path is ${root}; expected suffix ${expectedPathSuffix}`)
+  }
+
   if (!fs.existsSync(path.join(root, "package.json"))) {
     fail("package.json", "Missing package.json in current directory")
   } else {
@@ -63,8 +69,7 @@ async function checkGit() {
     if (branch === "main") pass("git branch", branch)
     else warn("git branch", branch || "(detached)")
 
-    if (!expectedRepo) pass("git remote", remotes ? "configured" : "not configured (local candidate)")
-    else if (remotes.includes(expectedRepo)) pass("git remote", expectedRepo)
+    if (remotes.includes(expectedRepo)) pass("git remote", expectedRepo)
     else warn("git remote", remotes || "(none)")
 
     const status = await git(["status", "--short"])

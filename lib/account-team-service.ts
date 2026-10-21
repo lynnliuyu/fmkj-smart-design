@@ -387,7 +387,7 @@ async function ensureOrganizationForOwner(context: AccountContext) {
   await db.query(
     `
     update account_profiles
-    set account_type = 'ENTERPRISE_OWNER', organization_id = $2, updated_at = now()
+    set organization_id = $2, updated_at = now()
     where user_id = $1
     `,
     [context.user.userId, created.rows[0].id],

@@ -1,1 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="180" height="60" viewBox="0 0 180 60"><rect width="180" height="60" rx="8" fill="#f3f6f3"/><text x="90" y="36" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#222d2a">Aqara</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120" role="img" aria-labelledby="title">
+  <title id="title">Aqara</title>
+  <rect width="320" height="120" rx="28" fill="#0EA5E9"/>
+  <path d="M72 78 105 32l33 46h-20l-13-20-13 20z" fill="#fff"/>
+  <text x="154" y="74" font-family="Inter, Arial, sans-serif" font-size="38" font-weight="800" fill="#fff">Aqara</text>
+</svg>

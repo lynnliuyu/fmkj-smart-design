@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { defaultProductVisualAsset, parseProductVisualAssetMutation, ProductVisualValidationError, validProductVisualImage } from "../lib/product-visual-assets"
 
-const input = { image: "/assets/products/switch.png", sourceImage: "https://example.com/original.png", crop: null, scale: 1, reviewStatus: "pending", expectedRevision: 0, evidence: "" }
+const input = { image: "/placeholder.svg", sourceImage: "https://example.com/original.png", crop: null, scale: 1, reviewStatus: "pending", expectedRevision: 0, evidence: "" }
 
 describe("reusable product display image contract", () => {
   it("keeps old product images usable without asserting an exact model", () => {

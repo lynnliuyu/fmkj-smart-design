@@ -32,6 +32,7 @@ export const migrationDefinitions = [
   ["create-project-deliveries.sql", "schema"],
   ["create-product-visual-assets.sql", "schema"],
   ["create-project-category-default-products.sql", "schema"],
+  ["drop-retired-modules.sql", "schema"],
 ].map(([id, kind]) => ({ id, kind, path: new URL(`./${id}`, import.meta.url) }))
 
 // Only complete schema sentinels adopt historical migrations. A products table by

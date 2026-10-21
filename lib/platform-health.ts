@@ -61,7 +61,7 @@ const environmentGroups = [
   },
   {
     keys: [
-      { key: "AUTH_SECRET", required: true },
+      { key: "JWT_SECRET", required: true },
       { key: "DEV_AUTH_TOKEN", required: false },
     ],
     name: "Authentication",

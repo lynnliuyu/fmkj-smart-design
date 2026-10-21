@@ -12,7 +12,10 @@ import {
   Grip,
   Hand,
   Layers,
+  MapPin,
   MapPinned,
+  Maximize2,
+  Minimize2,
   MousePointer2,
   Plus,
   RotateCcw,
@@ -34,15 +37,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -74,6 +78,7 @@ import {
 import { type QuoteDraftProduct } from "@/lib/quote-draft";
 import { pointMapLocalStore } from "@/lib/point-map-local-store";
 import { refreshPointMapQuote } from "@/lib/point-map-quote-refresh";
+import { overridePointMapDraft } from "@/lib/point-map-draft-override";
 import {
   activePointMapFloor,
   exportPointMapDraft,
@@ -94,13 +99,13 @@ import {
   fetchProjectPointMap,
   PointMapRequestError,
   saveProjectPointMap,
-  type PointMapVersion,
 } from "./point-map-client";
 import {
   applyReviewedPointEdit,
   applyReviewedSceneEdit,
   applyUploadedPointMapFloor,
   fillLoadedPointMapFloorDimensions,
+  floorplanPayloadAdvice,
   pointMapSceneConfirmationError,
   samePointMapDesignContent,
 } from "./point-map-edits";
@@ -125,6 +130,8 @@ import { defaultSpacesForPropertyType, type PropertyType } from "@/lib/project-s
 import { floorRoomOptions, nextFloorRooms, normalizeRoomName, UNASSIGNED_POINT_ROOM } from "@/lib/point-map-rooms";
 
 const ADD_ROOM_VALUE = "__add_room__";
+/** 画布工具条上的房间筛选占位值；null 表示不筛选。 */
+const FILTER_ALL_ROOMS = "__all_rooms__";
 
 type Project = {
   id: string;
@@ -223,6 +230,10 @@ export function PointMapWorkbench({
     source: "",
   });
   const [draftText, setDraftText] = React.useState("");
+  // 从 CAD 导入生成点位：布局名与原图一致才导得对，楼层名只影响草稿里的显示名。
+  const [cadSpace, setCadSpace] = React.useState("");
+  const [cadFloorName, setCadFloorName] = React.useState("一层");
+  const [cadBusy, setCadBusy] = React.useState(false);
   const [draftPreview, setDraftPreview] = React.useState<PointMapDraft | null>(
     null,
   );
@@ -233,7 +244,13 @@ export function PointMapWorkbench({
   const [cloudRevision, setCloudRevision] = React.useState<number | null>(null);
   const [cloudPlan, setCloudPlan] = React.useState<PointMapPlan | null>(null);
   const [pointMapSaveError, setPointMapSaveError] = React.useState("");
-  const [versions, setVersions] = React.useState<PointMapVersion[]>([]);
+  const [overrideOpen, setOverrideOpen] = React.useState(false);
+  const [sceneOpen, setSceneOpen] = React.useState(false);
+  const [roomsOpen, setRoomsOpen] = React.useState(false);
+  const [pointsOpen, setPointsOpen] = React.useState(false);
+  const [unplacedOpen, setUnplacedOpen] = React.useState(false);
+  const [fullscreen, setFullscreen] = React.useState(false);
+  const editorCardRef = React.useRef<HTMLDivElement | null>(null);
   const [dirty, setDirty] = React.useState(false);
   const [localStored, setLocalStored] = React.useState(true);
   const [localRestoring, setLocalRestoring] = React.useState(Boolean(initialProjectId));
@@ -241,9 +258,6 @@ export function PointMapWorkbench({
   const [hasBackup, setHasBackup] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
-  const [viewingVersion, setViewingVersion] = React.useState<number | null>(
-    null,
-  );
   const canvasRef = React.useRef<HTMLDivElement | null>(null);
   const viewportRef = React.useRef<HTMLDivElement | null>(null);
   const dragStateRef = React.useRef<PointDragState | null>(null);
@@ -270,7 +284,11 @@ export function PointMapWorkbench({
   const projectRef = React.useRef(selectedProjectId);
 
   const editingDisabled =
-    readOnly || viewingVersion !== null || cloudState === "forbidden" || busy || localRestoring;
+    !selectedProjectId ||
+    readOnly ||
+    cloudState === "forbidden" ||
+    busy ||
+    localRestoring;
   const editingDisabledRef = React.useRef(editingDisabled);
   React.useLayoutEffect(() => {
     planRef.current = plan;
@@ -333,6 +351,14 @@ export function PointMapWorkbench({
   const floorId = floor?.id;
   const floorRooms = floor?.rooms;
   const availableRooms = floorRoomOptions({ propertyType: selectedPropertyType, floor: floorId === undefined ? undefined : { id: floorId, rooms: floorRooms }, points: plan.points });
+  // 平移和拖动会让组件高频重渲染，产品兼容判断是其中最重的一段，必须缓存。
+  const compatibleProducts = React.useMemo(() => {
+    const intent = deviceIntentForIcon(selectedIcon.id);
+    if (!intent) return [];
+    return products.filter(
+      (product) => evaluateProductCompatibility(intent, product).status === "compatible",
+    );
+  }, [products, selectedIcon.id]);
 
   /** 把房间加入当前楼层清单，并一次性指定给点位，避免两次保存互相覆盖。 */
   function addFloorRoom(pointId: string, name: string) {
@@ -371,32 +397,68 @@ export function PointMapWorkbench({
           .includes(value)),
     );
   }, [floorPoints, products, query, roomFilter]);
-  const markerGroups = groupPointMapEditorMarkers(
-    visiblePoints.filter(point => point.placed).map(point => dragPreview?.pointId === point.id ? { ...point, ...dragPreview.position } : point),
-    editorGeometry, zoom, draggingPointId ?? activePointId,
+  const markerGroups = React.useMemo(
+    () =>
+      groupPointMapEditorMarkers(
+        visiblePoints
+          .filter((point) => point.placed)
+          .map((point) =>
+            dragPreview?.pointId === point.id
+              ? { ...point, ...dragPreview.position }
+              : point,
+          ),
+        editorGeometry,
+        zoom,
+        draggingPointId ?? activePointId,
+      ),
+    [visiblePoints, editorGeometry, zoom, draggingPointId, activePointId, dragPreview],
   );
-  const individualMarkerIds = new Set(markerGroups.filter(group => group.pointIds.length === 1).flatMap(group => group.pointIds));
-  const overlapPoints = visiblePoints.filter(point => overlapPointIds?.includes(point.id));
+  const individualMarkerIds = React.useMemo(
+    () =>
+      new Set(
+        markerGroups
+          .filter((group) => group.pointIds.length === 1)
+          .flatMap((group) => group.pointIds),
+      ),
+    [markerGroups],
+  );
+  const overlapPoints = React.useMemo(
+    () =>
+      overlapPointIds
+        ? visiblePoints.filter((point) => overlapPointIds.includes(point.id))
+        : [],
+    [visiblePoints, overlapPointIds],
+  );
   const markerTransform = `translate(-50%, -50%) scale(${editorGeometry.markerScale / zoom})`;
   function focusDrawing(points: Array<{ x: number; y: number }>) {
     const camera = focusPointMapEditorView(editorGeometry, points, viewportSize, zoom);
     setZoom(camera.zoom);
     setPan(camera.pan);
   }
+  const missingProducts = React.useMemo(
+    () =>
+      plan.points.filter(
+        (point) =>
+          point.productId &&
+          !products.some((product) => product.id === point.productId),
+      ),
+    [plan.points, products],
+  );
+  /** 未定位点位在画布上没有标记，必须保留显式入口，否则无法再定位它们。 */
+  const unplacedPoints = React.useMemo(
+    () => floorPoints.filter((point) => !point.placed),
+    [floorPoints],
+  );
   const roomStats = React.useMemo(
     () => summarizePointMapRooms(floorPoints),
     [floorPoints],
   );
-  const unresolved = plan.points.filter(
-    (point) => point.status !== "confirmed" || !point.placed,
-  ).length;
-  const proposedScenes = (plan.scenes ?? []).filter(
-    (scene) => scene.status !== "confirmed",
-  ).length;
-  const missingProducts = plan.points.filter(
-    (point) =>
-      point.productId &&
-      !products.some((product) => product.id === point.productId),
+  /** 房间筛选项取自当前楼层实际点位的房间，和原来的复核面板口径一致。 */
+  const filterRoomOptions = React.useMemo(
+    () => [
+      ...new Set(floorPoints.map((point) => point.room || UNASSIGNED_POINT_ROOM)),
+    ],
+    [floorPoints],
   );
   const editorPoint = plan.points.find((point) => point.id === pointEditorId);
 
@@ -413,6 +475,29 @@ export function PointMapWorkbench({
     dragPreviewRef.current = null;
     panDragRef.current = null;
     setPointEditorId(null);
+  }, []);
+
+  // 全屏编辑：让画布真正占满窗口，而不是挤在固定高度里。
+  React.useEffect(() => {
+    const onChange = () =>
+      setFullscreen(document.fullscreenElement === editorCardRef.current);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+  const toggleFullscreen = React.useCallback(() => {
+    if (typeof document === "undefined") return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => {});
+      return;
+    }
+    const element = editorCardRef.current;
+    if (!element || typeof element.requestFullscreen !== "function") {
+      setMessage("当前浏览器不支持全屏编辑，可先收起侧边栏再使用。");
+      return;
+    }
+    void element.requestFullscreen().catch(() => {
+      setMessage("浏览器拒绝了全屏请求，可先收起侧边栏再使用。");
+    });
   }, []);
 
   const selectProject = React.useCallback(
@@ -437,8 +522,7 @@ export function PointMapWorkbench({
       setCloudRevision(null);
       setCloudPlan(null);
       setPointMapSaveError("");
-      setVersions([]);
-      setViewingVersion(null);
+      setOverrideOpen(false);
       liveDraftRef.current = null;
       resetViewport();
     },
@@ -512,13 +596,17 @@ export function PointMapWorkbench({
       } catch (error) {
         if (active) { setLocalStored(false); setMessage(`${errorMessage(error)} 本机记录保留，请核对数据库草稿。`); }
       } finally { if (active) setLocalRestoring(false); }
-      return active ? fetchProjectPointMap(selectedProjectId) : null;
+      if (!active) return null;
+      // 读取完成时的本机草稿是与云端比较的基准；此后用户的新编辑属于待保存修改，
+      // 不能因为读取期间手快就先报冲突并锁住保存。
+      const baseline = planRef.current;
+      return { baseline, response: await fetchProjectPointMap(selectedProjectId) };
     }
     void restoreAndFetch()
-      .then((result) => {
-        if (!active || !result) return;
+      .then((payload) => {
+        if (!active || !payload) return;
+        const { baseline, response: result } = payload;
         setCloudRevision(result.revision);
-        setVersions(result.versions);
         setCloudPlan(result.data ? normalizeDesignPlan(result.data) : null);
         setCloudState("ready");
         const local = planRef.current;
@@ -545,18 +633,19 @@ export function PointMapWorkbench({
           setDirty(false);
           setMessage(`已载入云端草稿 r${result.revision}。`);
         } else {
-          const differs =
+          // 服务端自己补写的字段（选型核验快照、旧版缺失的测量值）不是本机修改；
+          // 否则每次保存后重新打开工作台都会误报「有未保存修改 / 云端冲突」。
+          const diverged =
+            (hasPlanContent(baseline) || pendingUploadsRef.current > 0) &&
+            !samePointMapDesignContent(baseline, result.data);
+          setDirty(
             (hasPlanContent(local) || pendingUploadsRef.current > 0) &&
-            !samePlanContent(local, result.data);
-          setDirty(differs);
-          if (
-            differs &&
-            result.data &&
-            !samePointMapDesignContent(local, result.data)
-          ) {
+              !samePointMapDesignContent(local, result.data),
+          );
+          if (diverged && result.data) {
             setCloudState("conflict");
             setMessage(
-              "本机草稿与云端内容不同。请先导出本机 JSON，再加载云端草稿比较，避免覆盖他人的修改。",
+              "本机草稿与云端内容不同（通常是你自己在报价单或另一个标签页改过）。可以先「导出本机 JSON」留档，再点「以本机为准保存」覆盖云端；或点「加载云端草稿」放弃本机修改。",
             );
           }
         }
@@ -608,7 +697,7 @@ export function PointMapWorkbench({
   function selectFloor(floorId: string) {
     const next = normalizeDesignPlan({ ...plan, activeFloorId: floorId });
     setPlan(next);
-    if (viewingVersion === null) persistLocal(next);
+    persistLocal(next);
     setActivePointId(null);
     setDrawingView("layout");
     setQuery("");
@@ -960,6 +1049,47 @@ export function PointMapWorkbench({
     }
   }
 
+  /**
+   * 从 CAD 导入生成点位：把文件交给本实例服务端，由服务端调用我方导入服务。
+   * 令牌只在服务端环境变量里，浏览器不接触；返回的是已落库的完整方案。
+   */
+  async function importCadFile(file: File | null) {
+    if (!file || editingDisabled || cadBusy) return;
+    const targetProject = selectedProjectId;
+    setCadBusy(true);
+    try {
+      const query = new URLSearchParams({ filename: file.name });
+      if (cadSpace.trim()) query.set("space", cadSpace.trim());
+      if (cadFloorName.trim()) query.set("floorName", cadFloorName.trim());
+      const response = await fetch(
+        `/api/projects/${targetProject}/cad-import?${query}`,
+        { method: "POST", headers: { "content-type": "application/octet-stream" }, body: file },
+      );
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(body?.error ?? `CAD 导入失败（HTTP ${response.status}）。`);
+      }
+      if (projectRef.current !== targetProject) return;
+      const next = normalizeDesignPlan(body.plan);
+      planRef.current = next;
+      setPlan(next);
+      setCloudRevision(body.revision);
+      setCloudPlan(next);
+      setDirty(false);
+      void persistLocal(next);
+      resetViewport();
+      setMessage(
+        `已从 CAD 生成 ${body.added} 个待复核点位（${body.floor ?? "一层"}，底图 ${body.imageWidth}×${body.imageHeight}）` +
+          (body.skipped ? `，跳过 ${body.skipped} 个已有点位` : "") +
+          "。点位类型按图层归类，房间与型号需人工复核后再确认。",
+      );
+    } catch (error) {
+      setMessage(errorMessage(error));
+    } finally {
+      setCadBusy(false);
+    }
+  }
+
   async function importDraftFile(file: File | null) {
     if (!file) return;
     const targetProject = selectedProjectId;
@@ -991,7 +1121,7 @@ export function PointMapWorkbench({
     try {
       downloadJson(
         exportPointMapDraft(plan),
-        `${selectedProject.name}-${viewingVersion ? `确认版-r${viewingVersion}` : "设计草稿"}.json`,
+        `${selectedProject.name}-设计草稿.json`,
       );
       setMessage(
         "已导出结构化 JSON，包含所有楼层、点位、控制关系和场景，可交回助手继续分析。",
@@ -1019,42 +1149,32 @@ export function PointMapWorkbench({
     }
   }
 
-  async function saveCloud(confirm = false): Promise<boolean> {
+  async function saveCloud(): Promise<boolean> {
     setPointMapSaveError("");
     if (pendingUploadsRef.current > 0) {
       setMessage("底图正在读取，请完成后再保存。");
       setPointMapSaveError("底图正在读取，请完成后再保存。");
       return false;
     }
-    if (editingDisabled || !selectedProjectId || cloudRevision === null) return false;
+    if (editingDisabled || !selectedProjectId) return false;
+    if (cloudRevision === null) {
+      // 首次读取云端失败时版本号未知，直接提交只会白跑一次；明确说明而不是静默返回。
+      const offline = "尚未取到云端版本号，无法保存。请点击「加载云端草稿」重新连接数据库后再保存；本机草稿仍然保留。";
+      setMessage(offline);
+      setPointMapSaveError(offline);
+      return false;
+    }
     // 切换页面时的「保存」也走这里：本机草稿与云端冲突时不能覆盖云端，
     // 否则报价页刚删掉的设备会被旧草稿写回。
     if (cloudState === "conflict") {
-      const conflict = "本机草稿与云端不一致，未保存。请先点「加载云端草稿」核对后再修改。";
+      const conflict = "本机草稿与云端不一致，未保存（本机草稿仍然保留）。可以点「以本机为准保存」覆盖云端，或点「加载云端草稿」放弃本机修改。";
       setMessage(conflict);
       setPointMapSaveError(conflict);
       return false;
     }
-    if (
-      confirm &&
-      (plan.scenes ?? []).some((scene) =>
-        pointMapSceneConfirmationError(scene, plan.points),
-      )
-    ) {
-      setMessage(
-        "场景信息尚未完整。每个场景都需要名称、触发方式、动作与条件和至少一个关联点位，请补充后再确认版本。",
-      );
-      return false;
-    }
-    if (confirm && (unresolved || proposedScenes || missingProducts.length)) {
-      setMessage(
-        `尚有 ${unresolved} 个点位未完成定位/确认、${proposedScenes} 个场景待确认、${missingProducts.length} 个产品未匹配。请逐项复核后确认版本。`,
-      );
-      return false;
-    }
     const current = planRef.current;
     const currentFloor = activePointMapFloor(current);
-    const snapshot = currentFloor
+    const filled = currentFloor
       ? fillLoadedPointMapFloorDimensions(
           current,
           currentFloor.id,
@@ -1062,48 +1182,131 @@ export function PointMapWorkbench({
           naturalSize,
         )
       : current;
-    if (snapshot !== current) {
-      planRef.current = snapshot;
-      savePlan(snapshot);
-    }
+    if (filled !== current) savePlan(filled);
+    // 提交 planRef.current（已规范化）本身，保存成功后据此确认期间没有并发编辑。
+    const submitted = planRef.current;
     const projectId = selectedProjectId;
     setBusy(true);
     try {
-      const result = await saveProjectPointMap(
-        snapshot,
-        cloudRevision,
-        confirm,
-      );
+      const result = await saveProjectPointMap(submitted, cloudRevision);
       if (projectRef.current !== projectId) return false;
+      const saved = result.data ? normalizeDesignPlan(result.data) : submitted;
       setCloudRevision(result.revision);
-      setVersions(result.versions);
-      setCloudPlan(result.data ? normalizeDesignPlan(result.data) : snapshot);
-      setDirty(false);
+      setCloudPlan(saved);
       setCloudState("ready");
+      // 服务端保存会用当前目录补齐选型核验快照。把返回稿写回本机草稿，
+      // 否则下次打开工作台会把服务端核验结果误判成「本机与云端不一致」，
+      // 于是「保存草稿」长期停在冲突状态、看起来像保存失败。
+      const keptLocalEdits = planRef.current !== submitted;
+      if (!keptLocalEdits) {
+        planRef.current = saved;
+        setPlan(saved);
+        void persistLocal(saved);
+      }
+      setDirty(keptLocalEdits);
       setMessage(
-        confirm
-          ? `已保存确认版本 r${result.revision}，后续修改不会改动这个版本。`
+        keptLocalEdits
+          ? `云端草稿 r${result.revision} 已保存；保存期间的新修改仍留在本机，请再次保存。`
           : `云端草稿 r${result.revision} 已保存。`,
       );
       // 等待报价快照写入完成，切换到报价页时才能读到最新结果。
       // Saving also retries a previously blocked/failed quote sync, even without design edits.
       await autoSyncQuote(result.revision, projectId);
+      if (keptLocalEdits)
+        setMessage(
+          `云端草稿 r${result.revision} 已保存；保存期间的新修改仍留在本机，请再次保存。`,
+        );
       return true;
     } catch (error) {
       if (projectRef.current !== projectId) return false;
-      setPointMapSaveError(errorMessage(error));
+      const failure = error instanceof PointMapRequestError ? error : undefined;
+      const detail =
+        failure?.status === 413
+          ? `${errorMessage(error)}${floorplanPayloadAdvice(planRef.current)}`
+          : errorMessage(error);
+      setPointMapSaveError(detail);
       setCloudState(
-        error instanceof PointMapRequestError && error.status === 409
+        // 版本号用尽是 409，但加载云端草稿也解决不了，不能当成可恢复的冲突。
+        failure?.status === 409 && failure.code !== "POINT_MAP_REVISION_LIMIT"
           ? "conflict"
-          : error instanceof PointMapRequestError &&
-              [401, 403].includes(error.status)
+          : failure && [401, 403, 404].includes(failure.status)
             ? "forbidden"
-            : error instanceof PointMapRequestError &&
-                [400, 413, 415, 422].includes(error.status)
+            : failure && [400, 409, 413, 415, 422].includes(failure.status)
               ? "ready"
               : "offline",
       );
-      setMessage(errorMessage(error));
+      setMessage(detail);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * 单人单机下冲突只来自自己的并发操作（报价页联动、另一个标签页、页面放太久），
+   * 因此允许显式「以本机为准」覆盖。覆盖前先读回云端当前稿：它既是要替换掉的内容，
+   * 也提供这次写入的基准 revision，所以覆盖不会绕过乐观锁，也不会静默发生。
+   */
+  async function overrideCloud(): Promise<boolean> {
+    if (pendingUploadsRef.current > 0) {
+      setMessage("底图正在读取，请完成后再覆盖云端。");
+      return false;
+    }
+    if (!selectedProjectId || busy || cloudState !== "conflict") return false;
+    const projectId = selectedProjectId;
+    setBusy(true);
+    try {
+      const outcome = await overridePointMapDraft(
+        {
+          read: async () => {
+            const current = await fetchProjectPointMap(projectId);
+            return { plan: current.data, revision: current.revision };
+          },
+          backup: async (plan) => {
+            // 先在内存留一份（关闭页面前都能导出），再写本机备份槽。
+            localBackupsRef.current.set(projectId, plan);
+            setHasBackup(true);
+            await pointMapLocalStore().write(plan, true);
+          },
+          save: async (plan, expectedRevision) => {
+            const saved = await saveProjectPointMap(plan, expectedRevision);
+            return { plan: saved.data, revision: saved.revision };
+          },
+          normalize: normalizeDesignPlan,
+        },
+        planRef.current,
+      );
+      if (projectRef.current !== projectId) return false;
+      planRef.current = outcome.plan;
+      setPlan(outcome.plan);
+      void persistLocal(outcome.plan);
+      setCloudRevision(outcome.revision);
+      setCloudPlan(outcome.plan);
+      setCloudState("ready");
+      setPointMapSaveError("");
+      setDirty(false);
+      setMessage(
+        `已用本机草稿覆盖云端并保存为 r${outcome.revision}。${
+          outcome.backupStored
+            ? `被替换的云端 r${outcome.replacedRevision} 已存为本机备份，可用「导出本机备份」取回。`
+            : "被替换的云端版本仅在当前页面保留，如需留档请先导出本机备份。"
+        }`,
+      );
+      await autoSyncQuote(outcome.revision, projectId);
+      return true;
+    } catch (error) {
+      if (projectRef.current !== projectId) return false;
+      const failure = error instanceof PointMapRequestError ? error : undefined;
+      // 覆盖期间云端又被改过：回到冲突态，用户可再点一次，绝不自动重试。
+      setCloudState(
+        failure?.status === 409 && failure.code !== "POINT_MAP_REVISION_LIMIT"
+          ? "conflict"
+          : failure && [401, 403, 404].includes(failure.status)
+            ? "forbidden"
+            : "ready",
+      );
+      setPointMapSaveError(errorMessage(error));
+      setMessage(`覆盖未完成：${errorMessage(error)}`);
       return false;
     } finally {
       setBusy(false);
@@ -1122,9 +1325,11 @@ export function PointMapWorkbench({
       const result = await fetchProjectPointMap(projectId);
       if (projectRef.current !== projectId) return;
       setCloudRevision(result.revision);
-      setVersions(result.versions);
       setCloudPlan(result.data ? normalizeDesignPlan(result.data) : null);
       setCloudState("ready");
+      // 成功重新连上数据库后清掉上一次的保存失败提示，避免旧错误继续显示。
+      setPointMapSaveError("");
+      setOverrideOpen(false);
       if (result.data) {
         // Keep a recoverable local backup before the user's explicit cloud replacement.
         const backup = liveDraftRef.current ?? planRef.current;
@@ -1141,7 +1346,6 @@ export function PointMapWorkbench({
         setPlan(next);
         resetViewport();
         persistLocal(next);
-        setViewingVersion(null);
         liveDraftRef.current = null;
         setActivePointId(null);
         setDirty(false);
@@ -1161,39 +1365,6 @@ export function PointMapWorkbench({
         );
         setMessage(errorMessage(error));
       }
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function viewVersion(value: string) {
-    if (pendingUploadsRef.current > 0) {
-      setMessage("底图正在读取，请完成后再切换版本。");
-      return;
-    }
-    if (value === "draft") {
-      if (liveDraftRef.current) setPlan(liveDraftRef.current);
-      resetViewport();
-      liveDraftRef.current = null;
-      setViewingVersion(null);
-      setActivePointId(null);
-      setMessage("已回到可编辑草稿。");
-      return;
-    }
-    const revision = Number(value);
-    const projectId = selectedProjectId;
-    setBusy(true);
-    try {
-      const result = await fetchProjectPointMap(projectId, revision);
-      if (projectRef.current !== projectId || !result.data) return;
-      if (viewingVersion === null) liveDraftRef.current = planRef.current;
-      setPlan(normalizeDesignPlan(result.data));
-      resetViewport();
-      setViewingVersion(revision);
-      setActivePointId(null);
-      setMessage(`正在查看确认版本 r${revision}。此版本只读，可以导出。`);
-    } catch (error) {
-      setMessage(errorMessage(error));
     } finally {
       setBusy(false);
     }
@@ -1249,9 +1420,7 @@ export function PointMapWorkbench({
   }
 
   const cloudLabel =
-    viewingVersion !== null
-      ? `确认版本 r${viewingVersion} · 只读`
-      : cloudState === "loading"
+    cloudState === "loading"
         ? "正在连接云端"
         : cloudState === "offline"
           ? "离线 · 仅本机草稿"
@@ -1271,10 +1440,10 @@ export function PointMapWorkbench({
       ? "正在读取数据库…"
       : pointMapSaveError
         ? `保存失败：${pointMapSaveError}`
-        : viewingVersion !== null || readOnly || cloudState === "forbidden"
+        : readOnly || cloudState === "forbidden"
           ? "当前只读，无法保存修改。"
           : cloudState === "conflict"
-            ? "数据库版本冲突，请加载最新草稿后再保存。"
+            ? "数据库版本冲突：可「以本机为准保存」，或「加载云端草稿」放弃本机修改。"
             : cloudState === "offline"
               ? "数据库暂不可用，修改仍在当前页面中。"
               : dirty
@@ -1284,7 +1453,7 @@ export function PointMapWorkbench({
                   : "尚未保存到数据库";
 
   return (
-    <section className="flex flex-col gap-5">
+    <section className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-1">
           <h1 className="text-2xl font-bold tracking-tight">点位图工作台</h1>
@@ -1296,7 +1465,7 @@ export function PointMapWorkbench({
           active="point-map"
           projectId={selectedProjectId}
           hasUnsavedChanges={() => dirty}
-          onSave={() => saveCloud(false)}
+          onSave={() => saveCloud()}
         /> : null}
       </div>
 
@@ -1324,6 +1493,71 @@ export function PointMapWorkbench({
           <Button
             size="sm"
             variant="outline"
+            onClick={() => setRoomsOpen(true)}
+            disabled={!selectedProjectId}
+          >
+            房间进度
+            <Badge variant="secondary" className="ml-1">
+              {floorPoints.filter((point) => point.status === "confirmed").length}/
+              {floorPoints.length}
+            </Badge>
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setPointsOpen(true)}
+            disabled={!selectedProjectId}
+          >
+            点位清单
+            <Badge variant="secondary" className="ml-1">
+              {visiblePoints.length}
+            </Badge>
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setSceneOpen(true)}
+            disabled={!selectedProjectId}
+          >
+            场景与联动
+            {(plan.scenes?.length ?? 0) > 0 && (
+              <Badge variant="secondary" className="ml-1">
+                {plan.scenes?.length}
+              </Badge>
+            )}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setUnplacedOpen(true)}
+            disabled={!selectedProjectId || !unplacedPoints.length}
+            title="未定位点位不在画布上显示，从这里定位"
+          >
+            <MapPin className="size-4" />
+            待定位
+            {unplacedPoints.length > 0 && (
+              <Badge variant="destructive" className="ml-1">
+                {unplacedPoints.length}
+              </Badge>
+            )}
+          </Button>
+          <Button
+            size="icon"
+            variant="outline"
+            className="size-8"
+            aria-label={fullscreen ? "退出全屏编辑" : "全屏编辑"}
+            title={fullscreen ? "退出全屏编辑" : "全屏编辑"}
+            onClick={toggleFullscreen}
+          >
+            {fullscreen ? (
+              <Minimize2 className="size-4" />
+            ) : (
+              <Maximize2 className="size-4" />
+            )}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
             onClick={() => saveCloud()}
             disabled={
               editingDisabled ||
@@ -1336,9 +1570,64 @@ export function PointMapWorkbench({
             <Save className="size-4" />
             保存草稿
           </Button>
-
+          {cloudState === "conflict" && (
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => setOverrideOpen(true)}
+              disabled={busy || uploading || !selectedProjectId}
+            >
+              以本机为准保存
+            </Button>
+          )}
         </CardContent>
+        {pointMapSaveError && (
+          <p
+            role="alert"
+            className="border-t px-3 py-2 text-xs leading-5 text-destructive"
+          >
+            保存失败：{pointMapSaveError}
+          </p>
+        )}
       </Card>
+
+      <Dialog
+        open={overrideOpen}
+        onOpenChange={(open) => {
+          if (!open && !busy) setOverrideOpen(false);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>用本机草稿覆盖云端？</DialogTitle>
+            <DialogDescription>
+              云端草稿和工作台里的这份不一样，通常是你自己在报价单或另一个标签页改过。继续会用本机这份保存成新版本；
+              被替换掉的那一版云端草稿会先存为本机备份，可从「导出本机备份」取回。想先留档，请先点「导出草稿 JSON」。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => setOverrideOpen(false)}
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={busy}
+              onClick={() => {
+                setOverrideOpen(false);
+                void overrideCloud();
+              }}
+            >
+              确认覆盖并保存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <details className="rounded-xl border bg-card p-3" open={!hasPlanContent(plan) || cloudState === "conflict"}>
         <summary className="cursor-pointer text-sm font-medium">高级工具 · 助手导入、CAD、底图与版本恢复</summary>
@@ -1361,42 +1650,6 @@ export function PointMapWorkbench({
               导出本机备份
             </Button>
           )}
-          <Button
-            size="sm"
-            onClick={() => saveCloud(true)}
-            disabled={
-              editingDisabled ||
-              uploading ||
-              !selectedProjectId ||
-              cloudRevision === null ||
-              cloudState === "conflict" ||
-              !plan.points.length
-            }
-          >
-            确认设计版本
-          </Button>
-          {versions.length > 0 && (
-            <Select
-              value={viewingVersion === null ? "draft" : String(viewingVersion)}
-              onValueChange={viewVersion}
-              disabled={busy || uploading}
-            >
-              <SelectTrigger aria-label="查看保存版本" className="h-8 w-44">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="draft">当前编辑草稿</SelectItem>
-                {versions.map((version) => (
-                  <SelectItem
-                    key={version.revision}
-                    value={String(version.revision)}
-                  >
-                    确认版 r{version.revision}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
           </div>
       <PointMapPresentationPanel
         plan={plan}
@@ -1409,6 +1662,57 @@ export function PointMapWorkbench({
           return true;
         }}
       />
+
+      <details className="rounded-xl border bg-card p-3">
+        <summary className="cursor-pointer text-sm font-medium">
+          从 CAD 导入生成点位
+        </summary>
+        <div className="mt-3 space-y-3">
+          <p className="text-sm text-muted-foreground">
+            上传原始 DWG / DXF，由本实例服务端调用 CAD 导入服务，按图纸窗口生成干净底图与待复核点位。
+            需要先在服务端配置 <code className="text-xs">CAD_IMPORT_SERVICE_URL</code> 与{" "}
+            <code className="text-xs">CAD_IMPORT_SERVICE_TOKEN</code>；令牌不会进入浏览器。
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label htmlFor="cad-space">原图布局名（可选）</Label>
+              <Input
+                id="cad-space"
+                value={cadSpace}
+                disabled={editingDisabled || cadBusy}
+                onChange={(event) => setCadSpace(event.target.value)}
+                placeholder="例如 平面图；留空则导出全部布局"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="cad-floor">楼层名</Label>
+              <Input
+                id="cad-floor"
+                value={cadFloorName}
+                disabled={editingDisabled || cadBusy}
+                onChange={(event) => setCadFloorName(event.target.value)}
+                placeholder="一层"
+              />
+            </div>
+          </div>
+          <Input
+            id="cad-file"
+            type="file"
+            accept=".dwg,.dxf"
+            disabled={editingDisabled || cadBusy}
+            onChange={(event) => {
+              const file = event.target.files?.[0] ?? null;
+              event.target.value = "";
+              void importCadFile(file);
+            }}
+          />
+          <p className="text-xs text-muted-foreground">
+            {cadBusy
+              ? "正在处理：解码图纸、按窗口渲染底图与参考图、提取点位，可能需要几分钟…"
+              : "生成的点位是待复核状态，不会自动确认，也不改报价或固定交付版本。"}
+          </p>
+        </div>
+      </details>
 
       <details className="rounded-xl border bg-card p-3">
         <summary className="cursor-pointer text-sm font-medium">
@@ -1490,7 +1794,7 @@ export function PointMapWorkbench({
       </details>
 
       <PointMapCadPanel
-        key={`${selectedProjectId}:${floor?.id ?? ""}:${viewingVersion ?? "draft"}`}
+        key={`${selectedProjectId}:${floor?.id ?? ""}`}
         plan={plan}
         floor={floor}
         projectName={selectedProject.name}
@@ -1519,7 +1823,10 @@ export function PointMapWorkbench({
         </div>
       </details>
 
-      <Card className="overflow-hidden">
+      <Card
+        ref={editorCardRef}
+        className="flex min-h-0 flex-1 flex-col overflow-hidden"
+      >
         <CardHeader className="gap-3 p-3 md:p-4">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div>
@@ -1617,10 +1924,7 @@ export function PointMapWorkbench({
           </div>
           <Toolbar
             disabled={editingDisabled}
-            products={products.filter((product) => {
-              const intent = deviceIntentForIcon(selectedIcon.id);
-              return intent && evaluateProductCompatibility(intent, product).status === "compatible";
-            })}
+            products={compatibleProducts}
             selectedProductId={selectedProductId}
             selectedRoom={selectedRoom}
             roomOptions={availableRooms}
@@ -1628,13 +1932,13 @@ export function PointMapWorkbench({
             onRoomChange={setSelectedRoom}
           />
         </CardHeader>
-        <CardContent className="space-y-3 p-2 pt-0 md:p-3 md:pt-0">
+        <CardContent className="flex min-h-0 flex-1 flex-col gap-3 p-2 pt-0 md:p-3 md:pt-0">
           <PointMapDrawings plan={plan} floor={floor} view={drawingView} disabled={editingDisabled || uploading} onSelect={setDrawingView} onApply={(next, expected) => {
             if (planRef.current !== expected || next.projectId !== projectRef.current || editingDisabledRef.current || pendingUploadsRef.current > 0) return false;
             savePlan(next);
             return true;
           }} />
-          <div className="grid gap-2 lg:grid-cols-[148px_minmax(0,1fr)] 2xl:grid-cols-[194px_minmax(0,1fr)]">
+          <div className="grid min-h-0 flex-1 gap-2 lg:grid-cols-[148px_minmax(0,1fr)] 2xl:grid-cols-[194px_minmax(0,1fr)]">
             <IconPalette
               disabled={editingDisabled}
               selectedIconId={selectedIconId}
@@ -1642,16 +1946,50 @@ export function PointMapWorkbench({
               onDragStart={setDraggingIconId}
               onIconChange={selectIcon}
             />
-            <div
-              ref={viewportRef}
-              role="region"
-              aria-label="点位图画布"
-              data-point-viewport
-              className={cn(
-                "relative h-[72vh] min-h-96 overflow-hidden rounded-lg border bg-muted/30 touch-none",
-                tool === "pan" && "cursor-grab active:cursor-grabbing",
-              )}
-              onPointerDown={beginPan}
+            <div className="flex min-h-0 min-w-0 flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={query}
+                    aria-label="搜索当前楼层点位"
+                    onChange={(event) => setQuery(event.target.value)}
+                    className="h-8 w-48 pl-9"
+                    placeholder="搜索编号、房间、产品、灯组"
+                  />
+                </div>
+                <Select
+                  value={roomFilter ?? FILTER_ALL_ROOMS}
+                  onValueChange={(value) =>
+                    setRoomFilter(value === FILTER_ALL_ROOMS ? null : value)
+                  }
+                >
+                  <SelectTrigger className="h-8 w-36" aria-label="按房间筛选点位">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={FILTER_ALL_ROOMS}>全部房间</SelectItem>
+                    {filterRoomOptions.map((room) => (
+                      <SelectItem key={room} value={room}>
+                        {room}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="text-xs text-muted-foreground">
+                  当前楼层 {visiblePoints.length}/{floorPoints.length} 个点位
+                </span>
+              </div>
+              <div
+                ref={viewportRef}
+                role="region"
+                aria-label="点位图画布"
+                data-point-viewport
+                className={cn(
+                  "relative min-h-[26rem] flex-1 overflow-hidden rounded-lg border bg-muted/30 touch-none",
+                  tool === "pan" && "cursor-grab active:cursor-grabbing",
+                )}
+                onPointerDown={beginPan}
               onPointerMove={(event) => {
                 const state = panDragRef.current;
                 if (state)
@@ -1669,7 +2007,7 @@ export function PointMapWorkbench({
             >
               {floor?.floorplanDataUrl ? (
                 <div
-                  key={`${viewingVersion ?? "draft"}:${floor.id}`}
+                  key={floor.id}
                   ref={canvasRef}
                   className={cn(
                     "absolute left-1/2 top-1/2 select-none",
@@ -1839,6 +2177,7 @@ export function PointMapWorkbench({
                 </div>
               )}
             </div>
+            </div>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
             图标保持清晰大小，数量角标表示相邻点位，点开可逐个选择。局部布点可放大选中位置，拖动图标仍调整真实安装点；平移模式拖动画布。选中点位后可用方向键微调，Shift
@@ -1855,113 +2194,6 @@ export function PointMapWorkbench({
           {missingProducts.length} 个点位的产品 ID
           在当前产品库中不存在，请在点位详情重新关联。未匹配产品不会计入报价。
         </p>
-      )}
-      {plan.points.length > 0 && (
-        <div className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
-          <Card>
-            <CardHeader className="p-3">
-              <CardTitle className="text-sm">房间复核进度</CardTitle>
-              <CardDescription className="text-xs">
-                {floor?.name} · {floorPoints.length} 个点位
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 p-3 pt-0">
-              <Button
-                type="button"
-                size="sm"
-                variant={roomFilter === null ? "secondary" : "ghost"}
-                className="h-7 w-full justify-start text-xs"
-                aria-pressed={roomFilter === null}
-                onClick={() => setRoomFilter(null)}
-              >
-                全部房间
-              </Button>
-              {roomStats.map((room) => (
-                <button
-                  key={room.room}
-                  type="button"
-                  aria-pressed={roomFilter === room.room}
-                  onClick={() => setRoomFilter(roomFilter === room.room ? null : room.room)}
-                  className={cn(
-                    "w-full space-y-1 rounded-md p-1.5 text-left hover:bg-muted",
-                    roomFilter === room.room && "bg-muted",
-                  )}
-                >
-                  <div className="flex items-center justify-between text-xs">
-                    <span>{room.room}</span>
-                    <span className="text-muted-foreground">
-                      {room.confirmed}/{room.total}
-                    </span>
-                  </div>
-                  <Progress
-                    value={
-                      room.total
-                        ? Math.round((room.confirmed / room.total) * 100)
-                        : 0
-                    }
-                  />
-                </button>
-              ))}
-              {!roomStats.length && (
-                <p className="text-xs text-muted-foreground">
-                  当前楼层暂无点位。
-                </p>
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <CardTitle className="text-sm">当前楼层点位清单</CardTitle>
-                  <CardDescription className="text-xs">
-                    选中点位编辑控制灯组、产品和待复核事项。
-                  </CardDescription>
-                </div>
-                <Badge variant="secondary">{visiblePoints.length}</Badge>
-              </div>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={query}
-                  aria-label="搜索当前楼层点位"
-                  onChange={(event) => setQuery(event.target.value)}
-                  className="h-8 pl-9"
-                  placeholder="搜索编号、房间、产品、灯组"
-                />
-              </div>
-            </CardHeader>
-            <CardContent className="grid max-h-[640px] gap-2 overflow-y-auto p-3 pt-0 md:grid-cols-2 xl:grid-cols-3">
-              {visiblePoints.map((point) => (
-                <PointEditor
-                  key={point.id}
-                  active={point.id === activePointId && point.id !== pointEditorId}
-                  point={point}
-                  products={products}
-                  roomOptions={availableRooms}
-                  onAddRoom={addFloorRoom}
-                  onActivate={() => {
-                    setActivePointId(point.id);
-                    if (point.placed) focusDrawing([point]);
-                    if (!point.placed) {
-                      setTool("place");
-                      setMessage(`点击底图为 ${point.name} 确定位置。`);
-                    }
-                  }}
-                  onPatch={(patch) => patchPoint(point.id, patch)}
-                  onRemove={() => removePoint(point.id)}
-                  readOnly={editingDisabled}
-                  historical={viewingVersion !== null}
-                />
-              ))}
-              {!visiblePoints.length && (
-                <p className="text-sm text-muted-foreground">
-                  当前没有匹配点位。
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
       )}
       <Dialog open={overlapPointIds !== null && overlapPoints.length > 0} onOpenChange={open => { if (!open) setOverlapPointIds(null); }}>
         <DialogContent className="sm:max-w-md">
@@ -2001,7 +2233,6 @@ export function PointMapWorkbench({
                 onPatch={(patch) => patchPoint(editorPoint.id, patch)}
                 onRemove={() => removePoint(editorPoint.id)}
                 readOnly={editingDisabled}
-                historical={viewingVersion !== null}
               />
             )}
           </div>
@@ -2027,7 +2258,7 @@ export function PointMapWorkbench({
               </Button>
               <Button
                 type="button"
-                onClick={() => saveCloud(false)}
+                onClick={() => saveCloud()}
                 disabled={
                   editingDisabled ||
                   uploading ||
@@ -2043,12 +2274,161 @@ export function PointMapWorkbench({
           </div>
         </DialogContent>
       </Dialog>
-      <SceneEditor
-        scenes={plan.scenes ?? []}
-        points={plan.points}
-        readOnly={editingDisabled}
-        onChange={(scenes) => updatePlan({ scenes })}
-      />
+      <Dialog open={unplacedOpen} onOpenChange={(open) => setUnplacedOpen(open)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>待定位点位 · {unplacedPoints.length} 个</DialogTitle>
+            <DialogDescription>
+              这些点位还没有安装位置，不在画布上显示。选择一个后点击底图确定位置。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-80 space-y-2 overflow-y-auto">
+            {unplacedPoints.map((point) => (
+              <Button
+                key={point.id}
+                variant="outline"
+                className="h-auto w-full justify-start gap-3 py-3 text-left"
+                disabled={editingDisabled}
+                onClick={() => {
+                  setUnplacedOpen(false);
+                  setTool("place");
+                  setActivePointId(point.id);
+                  setMessage(`点击底图为 ${point.name} 确定位置。`);
+                }}
+              >
+                <MapPin className="size-4 shrink-0" />
+                <span className="min-w-0">
+                  <span className="block">
+                    {point.code || "点位"} · {point.name}
+                  </span>
+                  <span className="block text-xs font-normal text-muted-foreground">
+                    {point.room || "未分配房间"} · {iconForPoint(point).name}
+                  </span>
+                </span>
+              </Button>
+            ))}
+            {!unplacedPoints.length && (
+              <p className="text-sm text-muted-foreground">
+                当前楼层没有待定位点位。
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={roomsOpen} onOpenChange={(open) => setRoomsOpen(open)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>房间复核进度</DialogTitle>
+            <DialogDescription>
+              {floor?.name} · {floorPoints.length} 个点位。点击房间可筛选画布，再点一次取消。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-96 space-y-2 overflow-y-auto">
+            <Button
+              type="button"
+              size="sm"
+              variant={roomFilter === null ? "secondary" : "ghost"}
+              className="h-7 w-full justify-start text-xs"
+              aria-pressed={roomFilter === null}
+              onClick={() => setRoomFilter(null)}
+            >
+              全部房间
+            </Button>
+            {roomStats.map((room) => (
+              <button
+                key={room.room}
+                type="button"
+                aria-pressed={roomFilter === room.room}
+                onClick={() =>
+                  setRoomFilter(roomFilter === room.room ? null : room.room)
+                }
+                className={cn(
+                  "w-full space-y-1 rounded-md p-1.5 text-left hover:bg-muted",
+                  roomFilter === room.room && "bg-muted",
+                )}
+              >
+                <div className="flex items-center justify-between text-xs">
+                  <span>{room.room}</span>
+                  <span className="text-muted-foreground">
+                    {room.confirmed}/{room.total}
+                  </span>
+                </div>
+                <Progress
+                  value={
+                    room.total
+                      ? Math.round((room.confirmed / room.total) * 100)
+                      : 0
+                  }
+                />
+              </button>
+            ))}
+            {!roomStats.length && (
+              <p className="text-xs text-muted-foreground">当前楼层暂无点位。</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={pointsOpen} onOpenChange={(open) => setPointsOpen(open)}>
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-3 p-4 sm:max-w-4xl">
+          <DialogHeader className="shrink-0 pr-8">
+            <DialogTitle>当前楼层点位清单</DialogTitle>
+            <DialogDescription>
+              点一个点位打开它的详情编辑；未定位的点位会进入布点模式。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 overflow-y-auto p-1">
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {visiblePoints.map((point) => (
+                <PointEditor
+                  key={point.id}
+                  active={point.id === activePointId && point.id !== pointEditorId}
+                  point={point}
+                  products={products}
+                  roomOptions={availableRooms}
+                  onAddRoom={addFloorRoom}
+                  onActivate={() => {
+                    setPointsOpen(false);
+                    setActivePointId(point.id);
+                    if (point.placed) {
+                      focusDrawing([point]);
+                      setPointEditorId(point.id);
+                      return;
+                    }
+                    setTool("place");
+                    setMessage(`点击底图为 ${point.name} 确定位置。`);
+                  }}
+                  onPatch={(patch) => patchPoint(point.id, patch)}
+                  onRemove={() => removePoint(point.id)}
+                  readOnly={editingDisabled}
+                  />
+              ))}
+              {!visiblePoints.length && (
+                <p className="text-sm text-muted-foreground">
+                  当前没有匹配点位。
+                </p>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={sceneOpen} onOpenChange={(open) => setSceneOpen(open)}>
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-3 p-4 sm:max-w-3xl">
+          <DialogHeader className="shrink-0 pr-8">
+            <DialogTitle>场景与控制说明</DialogTitle>
+            <DialogDescription>
+              助手建议保持待确认。核对触发方式、动作和关联点位后逐个确认；确认设计版本前所有场景都要确认。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 overflow-y-auto p-1">
+            <SceneEditor
+              scenes={plan.scenes ?? []}
+              points={plan.points}
+              readOnly={editingDisabled}
+              onChange={(scenes) => updatePlan({ scenes })}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
@@ -2320,18 +2700,6 @@ async function readLocalBackup(projectId: string): Promise<PointMapPlan | null> 
   return (await pointMapLocalStore().read(projectId, true))?.plan ?? null;
 }
 
-function samePlanContent(plan: PointMapPlan, other: PointMapPlan | null) {
-  if (!other) return false;
-  try {
-    return (
-      JSON.stringify(exportPointMapDraft(plan)) ===
-      JSON.stringify(exportPointMapDraft(normalizeDesignPlan(other)))
-    );
-  } catch {
-    return false;
-  }
-}
-
 function errorMessage(error: unknown) {
   return error instanceof Error
     ? error.message
@@ -2500,7 +2868,6 @@ function PointEditor({
   roomOptions,
   onAddRoom,
   readOnly = false,
-  historical = false,
   onActivate,
   onPatch,
   onRemove,
@@ -2511,7 +2878,6 @@ function PointEditor({
   roomOptions: string[];
   onAddRoom: (pointId: string, name: string) => string | null;
   readOnly?: boolean;
-  historical?: boolean;
   onActivate: () => void;
   onPatch: (patch: Partial<PointMapNode>) => void;
   onRemove: () => void;
@@ -2522,7 +2888,7 @@ function PointEditor({
   const [addingRoom, setAddingRoom] = React.useState(false);
   const [newRoomName, setNewRoomName] = React.useState("");
   const missingProduct = Boolean(
-    !(historical && point.selection) && point.productId &&
+    point.productId &&
     !products.some((product) => product.id === point.productId),
   );
 
@@ -2573,7 +2939,7 @@ function PointEditor({
               missingProduct ? "text-destructive" : "text-muted-foreground",
             )}
           >
-            {historical && point.selection ? `${point.selection.name} · ${point.selection.manufacturerModel || point.selection.sku}（历史选型）` : productName(products, point.productId)}
+            {productName(products, point.productId)}
           </span>
         </span>
       </button>
@@ -2723,12 +3089,13 @@ function PointEditor({
                     aria-label="新房间名称"
                     className="h-8"
                     autoFocus
+                    disabled={readOnly}
                     value={newRoomName}
                     onChange={(event) => setNewRoomName(event.target.value)}
                     placeholder="例如：健身房"
                   />
-                  <Button type="submit" size="sm" disabled={!normalizeRoomName(newRoomName)}>添加</Button>
-                  <Button type="button" size="sm" variant="ghost" onClick={() => { setAddingRoom(false); setNewRoomName(""); }}>取消</Button>
+                  <Button type="submit" size="sm" disabled={readOnly || !normalizeRoomName(newRoomName)}>添加</Button>
+                  <Button type="button" size="sm" variant="ghost" disabled={readOnly} onClick={() => { setAddingRoom(false); setNewRoomName(""); }}>取消</Button>
                 </form>
               )}
             </div>
@@ -2753,7 +3120,7 @@ function PointEditor({
               </Select>
             </div>
           </div>
-          <PointSelectionEditor point={point} products={products} readOnly={readOnly} historical={historical} onPatch={onPatch} />
+          <PointSelectionEditor point={point} products={products} readOnly={readOnly} onPatch={onPatch} />
           <PointMaterialsEditor point={point} products={products} readOnly={readOnly} onPatch={onPatch} />
           <div className="grid gap-2">
             <Label htmlFor={`${editorId}-targets`}>控制灯组 / 回路</Label>

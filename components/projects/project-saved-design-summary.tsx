@@ -4,8 +4,6 @@ import * as React from "react"
 import Link from "next/link"
 import { AlertCircle, Loader2, RefreshCw } from "lucide-react"
 
-import { SummaryTile } from "@/components/business/summary-tile"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { normalizeDesignPlan } from "@/lib/point-map-design"
 import { fetchProjectPointMap, PointMapRequestError, type PointMapResponse } from "./point-map-client"
@@ -83,24 +81,22 @@ export function ProjectSavedDesignSummary({ projectId }: { projectId: string }) 
 
   const plan = saved.data
   const floors = plan.floors ?? []
+  const sceneCount = (plan.scenes ?? []).length
   const placedCount = plan.points.filter((point) => point.placed).length
   const pendingCount = plan.points.length - placedCount
   const pendingProducts = plan.points.filter((point) => !point.productId).length
   const pendingScenes = (plan.scenes ?? []).filter((scene) => scene.status !== "confirmed").length
+  const floorplanCount = floors.filter((floor) => floor.floorplanDataUrl).length
   const pointMapHref = `/point-map?projectId=${encodeURIComponent(projectId)}`
 
   return (
     <div className="space-y-4" aria-label="已保存点位草稿">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-medium">已保存点位草稿</h3>
-        <Badge variant="secondary">数据库草稿 r{saved.revision}</Badge>
-      </div>
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryTile label="底图 / 图纸" value={`${floors.filter((floor) => floor.floorplanDataUrl).length} / ${floors.length}`} />
-        <SummaryTile label="点位" value={`${plan.points.length} 个`} detail={`${placedCount} 已定位 · ${pendingCount} 待定位`} />
-        <SummaryTile label="商品待选型" value={`${pendingProducts} 个点位`} />
-        <SummaryTile label="场景待确认" value={`${pendingScenes} / ${(plan.scenes ?? []).length} 个`} />
-      </div>
+      <p className="text-sm">
+        <span className="font-medium">已保存点位草稿</span>
+        <span className="text-muted-foreground">
+          {" "}· r{saved.revision} · 底图 {floorplanCount} / {floors.length} · 点位 {plan.points.length} 个（{placedCount} 已定位、{pendingCount} 待定位） · 商品待选型 {pendingProducts} 个 · 场景待确认 {pendingScenes} / {sceneCount} 个
+        </span>
+      </p>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {floors.map((floor) => {
           const points = plan.points.filter((point) => point.floorId === floor.id)
@@ -121,7 +117,6 @@ export function ProjectSavedDesignSummary({ projectId }: { projectId: string }) 
           )
         })}
       </div>
-      <p className="text-xs text-muted-foreground">以上为数据库中已保存的工程底图和草稿统计。类别、位置、商品与场景仍需逐项核对。</p>
     </div>
   )
 }

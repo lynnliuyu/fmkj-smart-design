@@ -1,3 +1,7 @@
 # Local deterministic XCLIP renderer. Install once; exports run offline.
-ezdxf==1.4.4
+# 1.4.5 fixes repeated HATCH scale/rotation and pattern-origin transforms.
+ezdxf==1.4.5
 PyMuPDF==1.26.7
+# ezdxf addons.drawing imports PIL unconditionally (ezdxf[draw] extra). Linux
+# installs never pulled it in, so keep it explicit here.
+Pillow>=10,<13

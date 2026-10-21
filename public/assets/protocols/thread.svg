@@ -1,1 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="180" height="60" viewBox="0 0 180 60"><rect width="180" height="60" rx="8" fill="#f3f6f3"/><text x="90" y="36" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#222d2a">Thread</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120" role="img" aria-labelledby="title">
+  <title id="title">Thread</title>
+  <rect width="320" height="120" rx="28" fill="#111827"/>
+  <circle cx="62" cy="60" r="24" fill="#16A34A"/>
+  <path d="M50 61h24M62 49v24" stroke="#fff" stroke-width="8" stroke-linecap="round"/>
+  <text x="104" y="72" font-family="Inter, Arial, sans-serif" font-size="38" font-weight="700" fill="#fff">Thread</text>
+</svg>

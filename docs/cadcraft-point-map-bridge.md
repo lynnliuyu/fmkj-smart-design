@@ -10,6 +10,10 @@
 
 ## DWG 原图逐页对照（先于净底）
 
+需要由其他程序调用时，使用独立的[CAD 快速导出 HTTP 接口](cad-export-api.md)：上传文件、查询任务、下载 PDF / PNG，复用本节的同一导出器。接口尚未接入设计站网页上传或项目保存。
+
+接口另有本机试用网页及明确指定布局的范围导出。限定布局或跳过总览不表示已完成全稿审阅；进入净底与项目方案前仍遵循本节的完整核对流程。真实复杂 DWG 的性能试验未通过，具体耗时与限制见接口文档，不能把样例速度或局部图页作为客户整套方案完成的证据。
+
 收到 DWG / DXF，先通过本机 CADCraft 读取原图，导出对照资料；不要先删文字、电气图层或直接选一个方案当净底。一个布局可能横向放了几十张图，不等于一页；Model 里也可能另有旧方案。先看全部空间总览，再逐页比较，用户确认采用的方案后才进入下节。
 
 **不需要 AI 的操作方式（macOS）**：在 Finder 双击 `scripts/export-cad-review.command`，选择 DWG / DXF，等待导出结束。程序自动调用本机 CADCraft CLI，完成后打开双栏对照目录；结果保存在 `~/Documents/繁梦CAD图纸对照/文件名-时间/`。无需向助手发消息，也不用手输命令。当前机器自动查找下载目录的 CADCraft CLI；Node.js 24 和 Poppler 优先使用系统安装，其次使用已存在的 Codex 本机运行时。缺少依赖会说明原因，不会伪报成功。
@@ -44,7 +48,7 @@ pnpm run cad:review --source '/path/客户施工图.dwg' \
 可选的隐藏图层文件只能是图层名称 JSON 数组，例如 `["图框", "电气注释"]`。名称须与当前图纸核对，不照搬其他客户的清理名单。然后运行本机工具，输出目录必须尚不存在：
 
 ```sh
-node scripts/prepare-cad-floorplan.mjs \
+node （该脚本不随自部署版发布） \
   --source '/path/客户施工图.dwg' \
   --out-dir '.local/cad-preparation/客户-一层-v1' \
   --window '0,0,20000,15000' \
@@ -127,7 +131,7 @@ node node_modules/vitest/vitest.mjs run tests/cadcraft-point-map-bridge.test.ts
 先完成原图逐页核对，并从当前项目导出完整草稿。选择与工程布局同一房屋、同 WCS 窗口的灯光及开关原图页，再运行：
 
 ```sh
-node scripts/prepare-cad-reference-drawings.mjs \
+node （该脚本不随自部署版发布） \
   --source '/path/客户施工图.dwg' \
   --plan '/path/当前完整草稿.json' \
   --project-id '当前项目UUID' \
@@ -143,3 +147,5 @@ node scripts/prepare-cad-reference-drawings.mjs \
 输出 references.json、灯光 / 开关 PNG、SVG 或 PDF，以及记录来源和窗口的 manifest.json。两图使用当前工程净底的精确 CAD 窗口，长边 3000px，保留原电气文字和连线。密集 SVG 超过 40MB 时改用原生 PDF，按 CADCraft 明确打印框和窗口比例裁纸，不根据黑色像素独立紧裁。PDF 路径需 Python / pypdf、Poppler pdftoppm；可通过 CAD_REVIEW_PYTHON、PDFTOPPM 指定，缺少依赖明确失败。
 
 在工作台“导入已配准图纸包”，核对墙体和门洞，点击“保存草稿”才写数据库。包绑定项目、楼层和工程图指纹，改过底图的项目拒绝直接套用。原 DWG、图纸包与客户图只留在忽略的本地目录；不修改报价、历史确认版或固定交付。
+
+2026-10-21 后续：已定位 ezdxf1.4.4 的 HATCH 图块变换缺陷并锁定1.4.5；真实DWG指定“平面图”13张的HTTP导出99.401秒完成。旧失败基线保留，不能据此称整份源图、原打印比例或客户固定交付已经验收。见 [修复实测](reports/2026-10-21-cad-hatch-performance-fix.md)。

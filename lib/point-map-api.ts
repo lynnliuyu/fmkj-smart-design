@@ -4,7 +4,6 @@ import { getCurrentAccountContext } from "./account-context"
 import {
   getProjectPointMap,
   MAX_POINT_MAP_REQUEST_BYTES,
-  MAX_POINT_MAP_REVISION,
   PointMapServiceError,
   saveProjectPointMap,
 } from "./point-map-service"
@@ -23,15 +22,7 @@ export function createPointMapApiHandlers(dependencies: Dependencies = {}) {
         const account = await (dependencies.getContext ?? getCurrentAccountContext)()
         if (!account) throw new PointMapServiceError("NOT_AUTHENTICATED", 401)
         const { id } = await context.params
-        const versions = new URL(request.url).searchParams.getAll("version")
-        let version: number | undefined
-        if (versions.length) {
-          version = Number(versions[0])
-          if (versions.length !== 1 || !/^[1-9]\d*$/.test(versions[0]) || !Number.isSafeInteger(version) || version > MAX_POINT_MAP_REVISION) {
-            throw new PointMapServiceError("INVALID_POINT_MAP_VERSION", 400)
-          }
-        }
-        return privateJson(await (dependencies.read ?? getProjectPointMap)(account, id, version))
+        return privateJson(await (dependencies.read ?? getProjectPointMap)(account, id))
       } catch (error) {
         return pointMapApiErrorResponse(error)
       }

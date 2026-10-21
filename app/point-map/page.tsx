@@ -23,11 +23,15 @@ export default async function PointMapPage() {
       <AppSidebar />
       <SidebarInset>
         <SiteHeader />
-        <main className="flex flex-1 flex-col gap-6 p-4 md:p-8">
+        {/*
+          SidebarInset 本身已经是 <main>，并用 [&>main]:max-w-7xl 限制直接子级宽度。
+          点位图工作台需要占满窗口，所以这里用 div 而不是 main，避免被 1280px 居中约束。
+        */}
+        <div className="flex min-h-0 flex-1 flex-col gap-2 p-2 md:gap-3 md:p-3">
           <Suspense fallback={null}>
             <PointMapWorkbench readOnly={readOnly} />
           </Suspense>
-        </main>
+        </div>
       </SidebarInset>
     </SidebarProvider>
   )

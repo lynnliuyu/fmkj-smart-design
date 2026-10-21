@@ -4,6 +4,7 @@ import {
   applyReviewedSceneEdit,
   applyUploadedPointMapFloor,
   fillLoadedPointMapFloorDimensions,
+  floorplanPayloadAdvice,
   pointMapSceneConfirmationError,
   pointNameAfterIconChange,
   samePointMapDesignContent,
@@ -426,5 +427,130 @@ describe("legacy image measurement", () => {
       { width: 1000, height: 600 },
     );
     expect(samePointMapDesignContent(local, differentMeasuredSize)).toBe(false);
+  });
+});
+
+describe("server-owned selection snapshots are not cloud conflicts", () => {
+  // 服务端 hydratePlanSelections 保存时会补齐这些字段，工作台从不自己写。
+  const selection = {
+    productId: "product-a",
+    mappingRevision: 1,
+    deviceTypeId: "wall-switch",
+    sku: "SKU-1",
+    name: "智能开关",
+    manufacturerModel: null,
+    specs: {},
+    protocols: [],
+    capabilities: [],
+    unit: "个",
+    verifiedAt: "2026-10-15T00:00:00.000Z",
+    verifiedBy: "user-a",
+  };
+  function verified(value: PointMapPlan): PointMapPlan {
+    return {
+      ...value,
+      points: value.points.map((entry) =>
+        entry.productId ? { ...entry, selection } : entry,
+      ),
+    };
+  }
+
+  it("treats a server re-verification as the same design in both directions", () => {
+    const local = plan();
+    expect(samePointMapDesignContent(local, verified(local))).toBe(true);
+    expect(samePointMapDesignContent(verified(local), local)).toBe(true);
+    expect(samePointMapDesignContent(verified(local), verified(local))).toBe(true);
+  });
+
+  it("still reports a conflict for another product or a moved point", () => {
+    const local = plan();
+    const cloud = verified(local);
+    const swapped = {
+      ...cloud,
+      points: cloud.points.map((entry) =>
+        entry.id === "P1" ? { ...entry, productId: "product-b" } : entry,
+      ),
+    };
+    const moved = {
+      ...cloud,
+      points: cloud.points.map((entry) =>
+        entry.id === "P1" ? { ...entry, x: 21 } : entry,
+      ),
+    };
+    expect(samePointMapDesignContent(local, swapped)).toBe(false);
+    expect(samePointMapDesignContent(local, moved)).toBe(false);
+  });
+
+  it("ignores only the selection snapshot of a matching material line", () => {
+    const base = plan();
+    const local = {
+      ...base,
+      points: base.points.map((entry) =>
+        entry.id === "P1"
+          ? {
+              ...entry,
+              deviceTypeId: "wall-switch",
+              materials: [
+                {
+                  id: "material-1",
+                  productId: "product-a",
+                  role: "accessory" as const,
+                  quantity: 1,
+                  unit: "个",
+                  required: false,
+                  included: false,
+                },
+              ],
+            }
+          : entry,
+      ),
+    };
+    const cloud = {
+      ...local,
+      points: local.points.map((entry) =>
+        entry.id === "P1"
+          ? {
+              ...entry,
+              materials: entry.materials!.map((material) => ({
+                ...material,
+                selection,
+              })),
+            }
+          : entry,
+      ),
+    };
+    expect(samePointMapDesignContent(local, cloud)).toBe(true);
+    const changedQuantity = {
+      ...cloud,
+      points: cloud.points.map((entry) =>
+        entry.id === "P1"
+          ? {
+              ...entry,
+              materials: entry.materials!.map((material) => ({
+                ...material,
+                quantity: 2,
+              })),
+            }
+          : entry,
+      ),
+    };
+    expect(samePointMapDesignContent(local, changedQuantity)).toBe(false);
+  });
+});
+
+describe("413 payload advice", () => {
+  it("names the largest floor images so a multi-floor project knows what to shrink", () => {
+    const value = plan();
+    value.floors![0].floorplanDataUrl = `data:image/png;base64,${"A".repeat(4 * 1024 * 1024)}`;
+    const advice = floorplanPayloadAdvice(value);
+    expect(advice).toContain("一楼工程底图 3.0 MB");
+    expect(advice).toContain("负一楼工程底图");
+    expect(advice).toMatch(/当前草稿图片合计约 [\d.]+ MB/);
+  });
+
+  it("returns nothing when the draft holds no images", () => {
+    const value = plan();
+    for (const floor of value.floors ?? []) floor.floorplanDataUrl = "";
+    expect(floorplanPayloadAdvice(value)).toBe("");
   });
 });

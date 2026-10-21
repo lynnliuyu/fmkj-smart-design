@@ -167,19 +167,15 @@
 
 ```sh
 node --env-file=.env.local scripts/run-migration.mjs
-# Historical one-off review script is excluded from the public candidate.
-# Use the authenticated product administration UI for review and updates.
-# Historical one-off review script is excluded from the public candidate.
-# Use the authenticated product administration UI for review and updates.
+node --env-file=.env.local scripts/review-product-mapping.mjs seed-types
+node --env-file=.env.local scripts/review-product-mapping.mjs audit --out .local/product-mapping-review.json
 ```
 
 `audit` 是只读变更模板，逐条列出当前身份、预期 revision / updated_at 与受影响的点位和报价，`after` 默认空。核对最新产品资料后填写分类或型号字段及原因，再应用；具体参数、参数证据与价格核验在产品后台完成。
 
 ```sh
-# Historical one-off review script is excluded from the public candidate.
-# Use the authenticated product administration UI for review and updates.
-# Historical one-off review script is excluded from the public candidate.
-# Use the authenticated product administration UI for review and updates.
+node --env-file=.env.local scripts/review-product-mapping.mjs apply --changes .local/product-mapping-review.json --actor ADMIN_UUID
+node --env-file=.env.local scripts/review-product-mapping.mjs rollback --change-id CHANGE_ID --actor ADMIN_UUID
 ```
 
 应用只接受设备类型、系列/具体规格身份及厂商型号整理，要求有效平台管理员，事务内先冻结旧报价展示，再检查并发并记录日志。同一变更 ID 重复应用不会重复更新；回退也是一次带版本检查的前向更新，参数和价格保持待核。原产品 ID、价格/成本和客户点位不因分类整理而改变。

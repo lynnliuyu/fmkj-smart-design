@@ -2,6 +2,7 @@
 import importlib.util
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 import ezdxf
 from ezdxf.xclip import XClip
@@ -13,6 +14,11 @@ spec.loader.exec_module(renderer)
 
 
 class ClippedReviewTest(unittest.TestCase):
+    def test_old_hatch_transform_library_is_refused_before_reading_source(self):
+        with patch.object(ezdxf, "version", (1, 4, 4, "release")):
+            with self.assertRaisesRegex(ValueError, "ezdxf 1.4.5"):
+                renderer.render_review({"source": "does-not-exist.dxf"})
+
     def test_target_and_clip_survive_offline_rendering(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
@@ -29,6 +35,7 @@ class ClippedReviewTest(unittest.TestCase):
             page = {"id":"detail", "space":"detail", "kind":"sheet", "bounds":[[0,0],[200,100]], "viewports":[{"handle":vp.dxf.handle}], "pdf":"detail.pdf", "png":"detail.png", "originalPdf":"detail.original.pdf", "originalPng":"detail.original.png"}
             result = renderer.render_review({"source":str(path),"outDir":str(root),"colorMode":"readable","expectedSpatialFilters":1,"pages":[page]})
             self.assertGreater(result[0]["records"],0)
+            self.assertEqual(result[0]["ezdxfVersion"], ezdxf.__version__)
             image = Image.open(root / "detail.png").convert("RGB")
             w,h = image.size
             # Find the rendered line near page centre; outside XCLIP must stay white.

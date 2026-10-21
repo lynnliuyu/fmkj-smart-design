@@ -1,9 +1,35 @@
 import { SignJWT, jwtVerify } from "jose"
-import { cookies } from "next/headers"
+import { cookies, headers } from "next/headers"
 import { getSessionSecretBytes } from "./session-secret"
 
 const SESSION_COOKIE_NAME = "session"
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7 // 7 days
+
+/**
+ * Cookie 的 Secure 标志。
+ *
+ * 不能简单地用 `NODE_ENV === "production"`：本地设备版在生产模式下用
+ * `http://<设备IP>:3000` 在局域网里访问，带 Secure 的 Cookie 浏览器根本不会保存，
+ * 表现就是「登录接口返回 200，人却还是未登录」。托管版走 HTTPS（Vercel 会带
+ * `x-forwarded-proto: https`），因此按实际协议判断；自建反向代理没带该头时，
+ * 用 AUTH_COOKIE_SECURE=true 显式打开。
+ */
+export function shouldUseSecureCookie(forwardedProto?: string | null): boolean {
+  const configured = (process.env.AUTH_COOKIE_SECURE ?? "auto").trim().toLowerCase()
+  if (configured === "true") return true
+  if (configured === "false") return false
+  return forwardedProto?.split(",")[0].trim().toLowerCase() === "https"
+}
+
+async function baseCookieOptions() {
+  const headerStore = await headers()
+  return {
+    httpOnly: true,
+    secure: shouldUseSecureCookie(headerStore.get("x-forwarded-proto")),
+    sameSite: "lax" as const,
+    path: "/",
+  }
+}
 
 export type AuthUser = {
   userId: string
@@ -46,22 +72,16 @@ export async function verifySessionToken(token: string): Promise<AuthUser | null
 export async function setSessionCookie(token: string): Promise<void> {
   const cookieStore = await cookies()
   cookieStore.set(SESSION_COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    ...await baseCookieOptions(),
     maxAge: SESSION_MAX_AGE,
-    path: "/",
   })
 }
 
 export async function clearSessionCookie(): Promise<void> {
   const cookieStore = await cookies()
   cookieStore.set(SESSION_COOKIE_NAME, "", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    ...await baseCookieOptions(),
     maxAge: 0,
-    path: "/",
   })
 }
 

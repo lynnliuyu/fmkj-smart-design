@@ -11,17 +11,14 @@ import { hydratePlanSelections } from "./point-map-selection-service"
 export const MAX_POINT_MAP_REQUEST_BYTES = 32 * 1024 * 1024
 export const MAX_POINT_MAP_REVISION = 2_147_483_647
 
-export type PointMapVersion = { revision: number; confirmedAt: string }
 export type PointMapPayload = {
   data: PointMapPlan | null
   revision: number
-  versions: PointMapVersion[]
 }
 
 export type SaveProjectPointMapInput = {
   plan: PointMapPlan
   expectedRevision: number
-  confirm?: boolean
 }
 
 type Dependencies = { db?: Pick<Pool, "connect">; now?: () => Date }
@@ -43,21 +40,16 @@ export class PointMapServiceError extends Error {
 export async function getProjectPointMap(
   context: AccountContext | null,
   projectId: string,
-  version?: number,
   dependencies: Dependencies = {},
 ): Promise<PointMapPayload> {
   const account = requireContext(context, projectId)
   const client = await (dependencies.db ?? getPool()).connect()
   try {
-    // One snapshot keeps the draft revision and confirmation list consistent.
     await client.query("begin isolation level repeatable read read only")
     await requireVisibleProject(client, account, projectId)
     assertPermission(account, "point_map.use")
-    if (version !== undefined && !isRevision(version, false)) {
-      throw new PointMapServiceError("INVALID_POINT_MAP_VERSION", 400)
-    }
 
-    const result = await readPointMap(client, projectId, version)
+    const result = await readPointMap(client, projectId)
     await client.query("commit")
     return result
   } catch (error) {
@@ -84,7 +76,6 @@ export async function saveProjectPointMap(
     assertPermission(account, "project.edit")
     assertWritableMembership(account, project)
     const parsed = validateSaveInput(input, projectId)
-    if (parsed.confirm) assertConfirmablePlan(parsed.plan)
 
     const existing = await client.query<{ revision: number; plan: PointMapPlan }>(
       `select revision, plan from project_point_map_designs where project_id = $1::uuid for update`,
@@ -105,7 +96,7 @@ export async function saveProjectPointMap(
     const serialized = JSON.stringify(plan)
     // Legacy normalization adds an active-floor mirror. Enforce the limit after
     // normalization as well so a saved plan can be reloaded and saved again.
-    if (Buffer.byteLength(JSON.stringify({ plan, expectedRevision: revision, confirm: false }), "utf8") > MAX_POINT_MAP_REQUEST_BYTES) {
+    if (Buffer.byteLength(JSON.stringify({ plan, expectedRevision: revision }), "utf8") > MAX_POINT_MAP_REQUEST_BYTES) {
       throw new PointMapServiceError("POINT_MAP_TOO_LARGE", 413)
     }
     if (existing.rows[0]) {
@@ -125,18 +116,8 @@ export async function saveProjectPointMap(
       )
     }
 
-    if (parsed.confirm) {
-      // Confirmation preserves the reviewed data as supplied; it never promotes scene/point statuses.
-      await client.query(
-        `insert into project_point_map_versions (project_id, revision, plan, confirmed_by)
-         values ($1::uuid, $2, $3::jsonb, $4::uuid)`,
-        [projectId, revision, serialized, account.user.userId],
-      )
-    }
-
-    const versions = await listVersions(client, projectId)
     await client.query("commit")
-    return { data: plan, revision, versions }
+    return { data: plan, revision }
   } catch (error) {
     await client.query("rollback")
     throw error
@@ -190,7 +171,7 @@ function validateSaveInput(value: unknown, projectId: string): SaveProjectPointM
     throw new PointMapServiceError("INVALID_POINT_MAP_REQUEST", 400)
   }
   const input = value as Record<string, unknown>
-  if (!isRevision(input.expectedRevision, true) || (input.confirm !== undefined && typeof input.confirm !== "boolean")) {
+  if (!isRevision(input.expectedRevision, true)) {
     throw new PointMapServiceError("INVALID_POINT_MAP_REQUEST", 400)
   }
   try {
@@ -198,7 +179,6 @@ function validateSaveInput(value: unknown, projectId: string): SaveProjectPointM
       throw new PointMapServiceError("POINT_MAP_TOO_LARGE", 413)
     }
     return {
-      confirm: input.confirm === true,
       expectedRevision: input.expectedRevision as number,
       plan: validateDesignPlan(input.plan, projectId),
     }
@@ -212,40 +192,11 @@ function isRevision(value: unknown, allowZero: boolean): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= (allowZero ? 0 : 1) && value <= MAX_POINT_MAP_REVISION
 }
 
-function assertConfirmablePlan(plan: PointMapPlan) {
-  if (plan.points.some((point) => !point.placed || point.status !== "confirmed")) {
-    throw new PointMapServiceError("POINT_MAP_REVIEW_REQUIRED", 400, "请完成所有点位的定位与人工确认后，再保存确认版本。")
-  }
-  if (plan.scenes?.some((scene) => scene.status !== "confirmed")) {
-    throw new PointMapServiceError("POINT_MAP_REVIEW_REQUIRED", 400, "请逐项确认场景后，再保存确认版本。")
-  }
-  if (plan.scenes?.some((scene) => !scene.name.trim() || !scene.trigger.trim() || !scene.description.trim() || !scene.pointIds.length)) {
-    throw new PointMapServiceError("POINT_MAP_SCENE_DETAILS_REQUIRED", 400, "确认场景需要填写名称、触发方式、动作说明，并关联至少一个点位。")
-  }
-  const usedFloors = new Set(plan.points.map((point) => point.floorId))
-  if (plan.floors?.some((floor) => usedFloors.has(floor.id) && (!floor.floorplanDataUrl || !floor.imageWidth || !floor.imageHeight))) {
-    throw new PointMapServiceError("POINT_MAP_FLOORPLAN_REQUIRED", 400, "有点位的楼层需要上传可读底图后，再保存确认版本。")
-  }
-}
-
-async function readPointMap(client: Client, projectId: string, version?: number): Promise<PointMapPayload> {
-  const result = version === undefined
-    ? await client.query<{ plan: PointMapPlan; revision: number }>(
-        `select plan, revision from project_point_map_designs where project_id = $1::uuid`, [projectId],
-      )
-    : await client.query<{ plan: PointMapPlan; revision: number }>(
-        `select plan, revision from project_point_map_versions where project_id = $1::uuid and revision = $2`, [projectId, version],
-      )
-  const row = result.rows[0]
-  if (!row && version !== undefined) throw new PointMapServiceError("POINT_MAP_VERSION_NOT_FOUND", 404)
-  return { data: row?.plan ?? null, revision: row?.revision ?? 0, versions: await listVersions(client, projectId) }
-}
-
-async function listVersions(client: Client, projectId: string): Promise<PointMapVersion[]> {
-  const result = await client.query<{ revision: number; confirmedAt: Date | string }>(
-    `select revision, confirmed_at as "confirmedAt" from project_point_map_versions
-     where project_id = $1::uuid order by revision desc`,
-    [projectId],
+/** 只读草稿：确认版本功能已下线（草图 + 固定交付版本才是现行工作流）。 */
+async function readPointMap(client: Client, projectId: string): Promise<PointMapPayload> {
+  const result = await client.query<{ plan: PointMapPlan; revision: number }>(
+    `select plan, revision from project_point_map_designs where project_id = $1::uuid`, [projectId],
   )
-  return result.rows.map((row) => ({ revision: row.revision, confirmedAt: new Date(row.confirmedAt).toISOString() }))
+  const row = result.rows[0]
+  return { data: row?.plan ?? null, revision: row?.revision ?? 0 }
 }

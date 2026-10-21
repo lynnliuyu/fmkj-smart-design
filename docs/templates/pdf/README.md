@@ -77,7 +77,7 @@ V1 试排文件不写入项目、不创建商品、不更新客户报价。请�
 python3 scripts/pdf-templates/build_samples.py --cli /path/to/pdfcraft-cli
 ```
 
-在这台工作站可使用 Codex bundled Python：`/path/to/workspace`。生成器使用本机 STHeiti 字体，不复制字体文件到仓库；其他系统需先配置可嵌入的中文字体。PDFCraft CLI 默认查找下载目录的 0.6.0，可通过 `--cli` 指定其他路径。
+在这台工作站可使用 Codex bundled Python：`/Users/you/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3`。生成器使用本机 STHeiti 字体，不复制字体文件到仓库；其他系统需先配置可嵌入的中文字体。PDFCraft CLI 默认查找下载目录的 0.6.0，可通过 `--cli` 指定其他路径。
 
 输出位于 `output/pdf/templates-v1/`，其中 `生成与核对记录.json` 记录实际页数、字段、来源策略和哈希。`*.slots.v1.json` 记录布局坐标，单位为 PDF point，原点位于页面左上角。图片槽位不代表自动读取任意网络地址。
 

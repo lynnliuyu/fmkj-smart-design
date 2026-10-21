@@ -21,8 +21,8 @@ function base64(bytes: Uint8Array) {
   for (let offset = 0; offset < bytes.length; offset += 32768) binary += String.fromCharCode(...bytes.subarray(offset, offset + 32768));
   return btoa(binary);
 }
-async function packImage(source: string): Promise<ImageAsset> {
-  const key = await hash(source);
+async function packImage(source: string, knownKey?: string): Promise<ImageAsset> {
+  const key = knownKey ?? (await hash(source));
   const match = /^(data:image\/[^;,]+;base64,)([\s\S]+)$/.exec(source);
   if (match) {
     try {
@@ -52,22 +52,52 @@ function restoreImages(value: unknown, assets: Map<string, string>): unknown {
   return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, restoreImages(entry, assets)]));
 }
 
+/** 底图 base64 的 atob/重编码比哈希贵得多，同一张图在多轮编辑里复用结果。 */
+const MAX_PACKED_IMAGES = 6;
+
 /** Image bytes and a compact plan commit together. Failure never replaces the last good draft. */
 export function createPointMapLocalStore(repository: LocalPlanRepository, legacy?: LegacyStorage) {
   const pending = new Map<string, Promise<void>>();
+  const latestWrite = new Map<string, number>();
+  const packed = new Map<string, ImageAsset>();
+  let writeSequence = 0;
+
+  async function packCached(source: string): Promise<ImageAsset> {
+    const key = await hash(source);
+    const cached = packed.get(key);
+    if (cached) {
+      // 命中后移到队尾，让淘汰按最近使用而不是插入顺序。
+      packed.delete(key);
+      packed.set(key, cached);
+      return cached;
+    }
+    const asset = await packImage(source, key);
+    packed.set(key, asset);
+    if (packed.size > MAX_PACKED_IMAGES) {
+      const oldest = packed.keys().next().value;
+      if (oldest !== undefined) packed.delete(oldest);
+    }
+    return asset;
+  }
+
   function write(plan: PointMapPlan, backup = false): Promise<void> {
     const snapshot = structuredClone(plan);
     const key = keyFor(plan.projectId, backup);
     const previousLegacy = legacy?.getItem(key);
+    const sequence = ++writeSequence;
+    latestWrite.set(key, sequence);
     const work = (pending.get(key) ?? Promise.resolve()).catch(() => {}).then(async () => {
-      const packed = new Map<string, Promise<ImageAsset>>();
+      // 已经有更新的写入排队时，这一笔会被后一笔完全覆盖：直接跳过，
+      // 避免拖动/连打时每一下都做一次完整的图片打包与 IndexedDB 事务。
+      if (latestWrite.get(key) !== sequence) return;
+      const assets = new Map<string, Promise<ImageAsset>>();
       const compact = await mapImages(snapshot, async (source) => {
-        let asset = packed.get(source);
-        if (!asset) { asset = packImage(source); packed.set(source, asset); }
+        let asset = assets.get(source);
+        if (!asset) { asset = packCached(source); assets.set(source, asset); }
         return { $image: (await asset).key };
       });
-      const assets = await Promise.all(packed.values());
-      await repository.write({ key, projectId: plan.projectId, format: "fmkj-local-point-map", version: 1, plan: compact, images: assets.map((asset) => asset.key) }, assets);
+      const resolved = await Promise.all(assets.values());
+      await repository.write({ key, projectId: plan.projectId, format: "fmkj-local-point-map", version: 1, plan: compact, images: resolved.map((asset) => asset.key) }, resolved);
       // Do not erase a legacy write made by another tab during migration.
       try { if (previousLegacy && legacy?.getItem(key) === previousLegacy) legacy.removeItem(key); } catch { /* The committed draft is durable; cleanup can be retried. */ }
     });
@@ -118,6 +148,15 @@ const complete = (transaction: IDBTransaction) => new Promise<void>((resolve, re
   transaction.onerror = () => reject(transaction.error ?? new Error("本机保存失败"));
 });
 
+/** 浏览器只在英文 DOMException 里给出配额原因，转成可执行的提示而不是抛出原始文本。 */
+function readableStorageError(error: unknown): Error {
+  const name = error && typeof error === "object" && "name" in error ? String((error as { name: unknown }).name) : "";
+  const code = error && typeof error === "object" && "code" in error ? Number((error as { code: unknown }).code) : 0;
+  if (name === "QuotaExceededError" || name === "QuotaExceeded" || code === 22)
+    return new Error("本机存储空间不足，底图没有写进本机缓存。请保存到数据库或导出 JSON，并清理浏览器站点数据后重试。");
+  return error instanceof Error ? error : new Error("本机保存失败，请保存到数据库或导出 JSON。");
+}
+
 /** Durable drafts are separate from evictable render caches; no LRU removes source images. */
 export function createBrowserPointMapLocalRepository(): LocalPlanRepository {
   let database: Promise<IDBDatabase> | undefined;
@@ -158,7 +197,7 @@ export function createBrowserPointMapLocalRepository(): LocalPlanRepository {
       const done = complete(transaction);
       for (const asset of assets) transaction.objectStore("images").put(asset);
       transaction.objectStore("plans").put(record);
-      await done;
+      try { await done; } catch (error) { throw readableStorageError(error); }
     },
   };
 }

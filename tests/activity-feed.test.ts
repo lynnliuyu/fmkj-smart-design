@@ -59,9 +59,9 @@ describe("activity feed", () => {
       {
         action: "quote.created",
         actorName: "设计",
-        description: "设计生成 QT-20260628-DEMO。",
+        description: "设计生成 QT-EXAMPLE-DEMO。",
         durationSeconds: 60 * 60,
-        entityLabel: "QT-20260628-DEMO",
+        entityLabel: "QT-EXAMPLE-DEMO",
         entityType: "quote",
         id: "activity_2",
         metadata: {},
@@ -74,7 +74,7 @@ describe("activity feed", () => {
     expect(toActivityNotification(item)).toMatchObject({
       actor: "设计",
       duration: "1 小时",
-      subject: "QT-20260628-DEMO",
+      subject: "QT-EXAMPLE-DEMO",
       title: "华侨城全屋智能 报价已生成",
     });
   });

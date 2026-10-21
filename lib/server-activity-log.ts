@@ -6,11 +6,9 @@ export type ActivityAction =
   | "project.stage_advanced"
   | "project.risk_toggled"
   | "quote.created"
-  | "quote.updated"
-  | "work_order.created"
-  | "work_order.completed";
+  | "quote.updated";
 
-export type ActivityEntityType = "project" | "quote" | "work_order";
+export type ActivityEntityType = "project" | "quote";
 
 export type RecordActivityInput = {
   action: ActivityAction;
