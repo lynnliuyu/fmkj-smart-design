@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/lib/format-datetime"
 import type { AuditLogEntry } from "@/lib/platform-health"
 import { PlatformListCard } from "@/app/admin/_components/platform-list"
 import { Badge } from "@/components/ui/badge"
@@ -7,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 export function AuditLogsView({ logs }: { logs: AuditLogEntry[] }) {
   const actors = new Set(logs.map((log) => log.actorId ?? log.actorName).filter(Boolean))
   const modules = new Set(logs.map((log) => log.entityType))
-  const latest = logs[0]?.occurredAt ? new Date(logs[0].occurredAt).toLocaleString("zh-CN") : "暂无"
+  const latest = logs[0]?.occurredAt ? formatDateTime(logs[0].occurredAt) : "暂无"
 
   return (
     <div className="flex flex-col gap-4">
@@ -50,7 +51,7 @@ export function AuditLogsView({ logs }: { logs: AuditLogEntry[] }) {
                     </Badge>
                   </TableCell>
                   <TableCell>{log.actorName ?? log.actorId ?? "系统"}</TableCell>
-                  <TableCell>{new Date(log.occurredAt).toLocaleString("zh-CN")}</TableCell>
+                  <TableCell>{formatDateTime(log.occurredAt)}</TableCell>
                 </TableRow>
               ))}
               {!logs.length ? (

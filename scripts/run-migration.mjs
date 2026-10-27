@@ -28,11 +28,19 @@ export const migrationDefinitions = [
   ["create-product-catalog-constraints.sql", "schema"],
   ["normalize-product-categories.sql", "legacy-data"],
   ["normalize-product-platform-brand.sql", "legacy-data"],
+  ["add-product-platforms.sql", "schema"],
+  ["create-product-dictionaries.sql", "schema"],
+  ["create-catalog-licenses.sql", "schema"],
+  ["update-product-platform-whitelist.sql", "schema"],
   ["create-project-property-type.sql", "schema"],
   ["create-project-deliveries.sql", "schema"],
   ["create-product-visual-assets.sql", "schema"],
   ["create-project-category-default-products.sql", "schema"],
   ["drop-retired-modules.sql", "schema"],
+  ["create-catalog-sync-runs.sql", "schema"],
+  ["create-login-attempts.sql", "schema"],
+  ["add-catalog-sync-signature.sql", "schema"],
+  ["backfill-first-run-initialized.sql", "data"],
 ].map(([id, kind]) => ({ id, kind, path: new URL(`./${id}`, import.meta.url) }))
 
 // Only complete schema sentinels adopt historical migrations. A products table by

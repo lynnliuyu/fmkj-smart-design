@@ -8,14 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { deviceTypes, findDeviceType, type DeviceSpecs } from "@/lib/device-types";
 import { evaluateProductCompatibility, type SelectionProduct } from "@/lib/product-selection";
 import type { PointMapNode } from "@/lib/point-map-plan";
+import { specValueLabel } from "@/lib/device-spec-labels";
 
 const usageNames = { proposed: "待评估", selected: "正式选用", reserve: "预留" } as const;
-const valueNames: Record<string, string> = {
-  neutral: "零火", "no-neutral": "单火", "dry-contact": "干接点", "low-voltage": "低压",
-  "ac-mains": "市电", dc: "直流", battery: "电池", usb: "USB", passive: "无源", poe: "PoE",
-  indoor: "室内", outdoor: "室外", "indoor-outdoor": "室内外通用",
-  ethernet: "有线网络", wifi: "Wi-Fi", "ethernet-wifi": "有线网络与 Wi-Fi", cellular: "蜂窝网络", analog: "模拟信号",
-};
 
 /** Requirements and purchasing intent are separate from the drawing review status. */
 export function PointSelectionEditor({ point, products, readOnly = false, onPatch }: {
@@ -46,7 +41,7 @@ export function PointSelectionEditor({ point, products, readOnly = false, onPatc
       const next = findDeviceType(value);
       onPatch({ deviceTypeId: next?.id, requirements: undefined, ...(next ? { iconId: next.defaultIconId } : {}) });
     }}><SelectTrigger aria-label="设备类型"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="unknown">待确定设备类型</SelectItem>{deviceTypes.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></div>
-    {type && <div className="grid gap-3 sm:grid-cols-2">{type.specs.map((field) => <div key={field.key} className="grid min-w-0 gap-1.5"><Label htmlFor={`${id}-${field.key}`} className="text-xs">{field.name}{field.requiredForPoint ? " *" : ""}{field.unit ? `（${field.unit}）` : ""}</Label>{field.values || field.type === "boolean" ? <Select value={point.requirements?.[field.key] === undefined ? "unknown" : String(point.requirements[field.key])} disabled={readOnly} onValueChange={(value) => setRequirement(field.key, value === "unknown" ? undefined : field.type === "boolean" ? value === "true" : value)}><SelectTrigger id={`${id}-${field.key}`} aria-label={`要求：${field.name}`}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="unknown">未知 / 暂无要求</SelectItem>{(field.values ?? ["true", "false"]).map((value) => <SelectItem key={value} value={value}>{field.type === "boolean" ? (value === "true" ? "需要" : "不需要") : valueNames[value] || value}</SelectItem>)}</SelectContent></Select> : <Input id={`${id}-${field.key}`} type={field.type === "number" ? "number" : "text"} min={field.min} max={field.max} step={field.integer ? 1 : "any"} disabled={readOnly} placeholder="未知 / 暂无要求" value={String(point.requirements?.[field.key] ?? "")} onChange={(event) => {
+    {type && <div className="grid gap-3 sm:grid-cols-2">{type.specs.map((field) => <div key={field.key} className="grid min-w-0 gap-1.5"><Label htmlFor={`${id}-${field.key}`} className="text-xs">{field.name}{field.requiredForPoint ? " *" : ""}{field.unit ? `（${field.unit}）` : ""}</Label>{field.values || field.type === "boolean" ? <Select value={point.requirements?.[field.key] === undefined ? "unknown" : String(point.requirements[field.key])} disabled={readOnly} onValueChange={(value) => setRequirement(field.key, value === "unknown" ? undefined : field.type === "boolean" ? value === "true" : value)}><SelectTrigger id={`${id}-${field.key}`} aria-label={`要求：${field.name}`}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="unknown">未知 / 暂无要求</SelectItem>{(field.values ?? ["true", "false"]).map((value) => <SelectItem key={value} value={value}>{field.type === "boolean" ? (value === "true" ? "需要" : "不需要") : specValueLabel(value) || value}</SelectItem>)}</SelectContent></Select> : <Input id={`${id}-${field.key}`} type={field.type === "number" ? "number" : "text"} min={field.min} max={field.max} step={field.integer ? 1 : "any"} disabled={readOnly} placeholder="未知 / 暂无要求" value={String(point.requirements?.[field.key] ?? "")} onChange={(event) => {
       const value = event.target.value;
       if (!value) setRequirement(field.key, undefined);
       else if (field.type !== "number") setRequirement(field.key, value);

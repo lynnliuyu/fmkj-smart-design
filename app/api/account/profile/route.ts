@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { getCurrentAccountContext } from "@/lib/account-context"
-import { getSessionUser } from "@/lib/auth"
+import { requireAccountPermission } from "@/lib/account-gates"
 import { getPool } from "@/lib/server-db"
 
 type ProfileRow = {
@@ -16,11 +16,12 @@ type ProfileRow = {
 
 export async function GET() {
   try {
-    const user = await getSessionUser()
-    if (!user) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 })
+    const context = await getCurrentAccountContext()
+    if (!context) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 })
+    if (context.account.status !== "active") return NextResponse.json({ error: "ACCOUNT_DISABLED" }, { status: 403 })
 
     await ensureProfileSchema()
-    const profile = await loadProfile(user.userId)
+    const profile = await loadProfile(context.user.userId)
 
     return NextResponse.json({ profile })
   } catch (error) {
@@ -35,12 +36,15 @@ export async function PATCH(request: NextRequest) {
   try {
     const context = await getCurrentAccountContext()
     if (!context) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 })
+    if (context.account.status !== "active") return NextResponse.json({ error: "ACCOUNT_DISABLED" }, { status: 403 })
 
     await ensureProfileSchema()
 
     const body = await request.json()
     const name = clean(body.name)
     const avatarUrl = clean(body.avatarUrl)
+    const hasCompanyName = Object.prototype.hasOwnProperty.call(body, "companyName")
+    const hasCompanyAvatar = Object.prototype.hasOwnProperty.call(body, "companyAvatarUrl")
     const companyName = clean(body.companyName)
     const companyAvatarUrl = clean(body.companyAvatarUrl)
 
@@ -49,6 +53,20 @@ export async function PATCH(request: NextRequest) {
     }
 
     const db = getPool()
+    const currentOrganization = hasCompanyName || hasCompanyAvatar
+      ? await loadOrganization(context.user.userId)
+      : null
+    const companyChanged = (hasCompanyName && companyName !== (currentOrganization?.name ?? "")) ||
+      (hasCompanyAvatar && companyAvatarUrl !== (currentOrganization?.avatarUrl ?? ""))
+    const companyPermission = requireAccountPermission(context, "enterprise.manage_members")
+    const canManageCompany = context.account.isSuperAdmin || companyPermission.allowed
+    // Read the current company first. A regular member may still save their own
+    // name/avatar when the settings form sends unchanged company fields, but a
+    // changed shared field is rejected before users is updated.
+    if (companyChanged && !canManageCompany) {
+      return NextResponse.json({ error: "COMPANY_PROFILE_FORBIDDEN" }, { status: 403 })
+    }
+
     await db.query(
       `
       update users
@@ -60,8 +78,8 @@ export async function PATCH(request: NextRequest) {
       [context.user.userId, name, avatarUrl]
     )
 
-    if (companyName || companyAvatarUrl) {
-      const organizationId = await ensureOrganization(context.user.userId, companyName || `${name}的公司`)
+    if (companyChanged && canManageCompany) {
+      const organizationId = currentOrganization?.id ?? await ensureOrganization(context.user.userId, companyName || `${name}的公司`, context.account.type)
       await db.query(
         `
         update organizations
@@ -70,7 +88,7 @@ export async function PATCH(request: NextRequest) {
             updated_at = now()
         where id = $1::uuid
         `,
-        [organizationId, companyName, companyAvatarUrl]
+        [organizationId, hasCompanyName ? companyName : "", hasCompanyAvatar ? companyAvatarUrl : currentOrganization?.avatarUrl ?? ""]
       )
     }
 
@@ -103,7 +121,7 @@ async function loadProfile(userId: string) {
     from users u
     left join account_profiles ap on ap.user_id = u.id
     left join organization_members om on om.user_id = u.id and om.member_status in ('active', 'invited')
-    left join organizations o on o.id = coalesce(ap.organization_id, om.organization_id) and o.status = 'active'
+    left join organizations o on o.id = coalesce(ap.organization_id, om.organization_id) and o.status in ('active', 'expired')
     where u.id = $1::uuid
     limit 1
     `,
@@ -127,7 +145,26 @@ async function loadProfile(userId: string) {
   }
 }
 
-async function ensureOrganization(userId: string, fallbackName: string) {
+async function loadOrganization(userId: string) {
+  const result = await getPool().query<{ id: string; name: string; avatarUrl: string | null }>(
+    `
+    select coalesce(ap.organization_id, om.organization_id, o.id)::text as id,
+           coalesce(o.name, '') as name,
+           o.avatar_url as "avatarUrl"
+    from users u
+    left join account_profiles ap on ap.user_id = u.id
+    left join organization_members om on om.user_id = u.id and om.member_status in ('active', 'invited')
+    left join organizations o on (o.id = coalesce(ap.organization_id, om.organization_id) or o.owner_user_id = u.id)
+      and o.status in ('active', 'expired')
+    where u.id = $1::uuid
+    limit 1
+    `,
+    [userId],
+  )
+  return result.rows[0] ?? null
+}
+
+async function ensureOrganization(userId: string, fallbackName: string, accountType: string) {
   const db = getPool()
   const current = await db.query<{ id: string }>(
     `
@@ -136,7 +173,7 @@ async function ensureOrganization(userId: string, fallbackName: string) {
     left join account_profiles ap on ap.user_id = u.id
     left join organization_members om on om.user_id = u.id and om.member_status in ('active', 'invited')
     left join organizations o on (o.id = coalesce(ap.organization_id, om.organization_id) or o.owner_user_id = u.id)
-      and o.status = 'active'
+      and o.status in ('active', 'expired')
     where u.id = $1::uuid
     limit 1
     `,
@@ -157,11 +194,11 @@ async function ensureOrganization(userId: string, fallbackName: string) {
   await db.query(
     `
     insert into account_profiles (user_id, account_type, account_status, organization_id)
-    values ($1::uuid, 'ENTERPRISE_OWNER', 'active', $2::uuid)
+    values ($1::uuid, $3::account_type, 'active', $2::uuid)
     on conflict (user_id)
     do update set organization_id = excluded.organization_id, updated_at = now()
     `,
-    [userId, created.rows[0].id]
+    [userId, created.rows[0].id, accountType]
   )
 
   return created.rows[0].id

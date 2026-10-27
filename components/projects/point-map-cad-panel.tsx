@@ -182,7 +182,7 @@ export function PointMapCadPanel({
   }
 
   return (
-    <details className="rounded-xl border bg-card p-3">
+    <details className="border-t pt-3">
       <summary className="cursor-pointer text-sm font-medium">
         Cadcraft 协作
       </summary>
@@ -276,13 +276,13 @@ export function PointMapCadPanel({
         {stale && (
           <p
             role="status"
-            className="text-xs text-amber-700 dark:text-amber-400"
+            className="text-xs text-warning"
           >
             方案已发生变化，原预览已失效。请重新校验回传文件。
           </p>
         )}
         {preview && !stale && (
-          <div className="space-y-3 rounded-lg border p-3">
+          <div className="space-y-3 rounded-lg bg-muted/60 p-3">
             <div className="space-y-1">
               <p className="font-medium">
                 {preview.result.payload.exchange.floorName} ·{" "}
@@ -323,6 +323,7 @@ export function PointMapCadPanel({
             )}
             <Button
               size="sm"
+              variant="outline"
               onClick={applyReturn}
               disabled={!canWrite || busy || !preview.result.changes.length}
             >

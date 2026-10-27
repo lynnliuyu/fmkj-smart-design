@@ -7,6 +7,8 @@ import {
   type QuickModule,
   type QuickTier,
 } from "@/lib/quick-quote-service"
+import { pointMapApiErrorResponse } from "@/lib/point-map-api"
+import { PointMapServiceError } from "@/lib/point-map-service"
 
 export async function POST(request: Request) {
   try {
@@ -39,6 +41,7 @@ export async function POST(request: Request) {
     if (error instanceof QuickQuoteError) {
       return NextResponse.json({ error: error.code }, { status: error.status })
     }
+    if (error instanceof PointMapServiceError) return pointMapApiErrorResponse(error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "QUICK_QUOTE_FAILED" },
       { status: 500 },

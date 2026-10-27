@@ -4,9 +4,12 @@ import {
   ArrowLeft,
   Home,
   LockKeyhole,
+  LogIn,
+  RefreshCw,
   SearchX,
   ServerCrash,
   ShieldAlert,
+  ShieldCheck,
   Wrench,
 } from "lucide-react"
 
@@ -26,6 +29,7 @@ type ErrorStateConfig = {
   detail: string
   icon: typeof LockKeyhole
   primaryLabel: string
+  primaryIcon: typeof LockKeyhole
 }
 
 const errorStates: Record<ErrorKind, ErrorStateConfig> = {
@@ -36,6 +40,7 @@ const errorStates: Record<ErrorKind, ErrorStateConfig> = {
     detail: "如果你已经登录，可能是当前会话已过期，请重新登录后再试。",
     icon: LockKeyhole,
     primaryLabel: "去登录",
+    primaryIcon: LogIn,
   },
   forbidden: {
     code: "403",
@@ -44,6 +49,7 @@ const errorStates: Record<ErrorKind, ErrorStateConfig> = {
     detail: "可以联系经理-老板调整角色权限，或切换到有权限的团队账号。",
     icon: ShieldAlert,
     primaryLabel: "查看团队权限",
+    primaryIcon: ShieldCheck,
   },
   "not-found": {
     code: "404",
@@ -52,6 +58,7 @@ const errorStates: Record<ErrorKind, ErrorStateConfig> = {
     detail: "请检查地址是否正确，也可以返回工作台继续操作。",
     icon: SearchX,
     primaryLabel: "返回首页",
+    primaryIcon: Home,
   },
   "internal-server-error": {
     code: "500",
@@ -60,6 +67,7 @@ const errorStates: Record<ErrorKind, ErrorStateConfig> = {
     detail: "如果问题持续出现，请记录当前操作路径并联系技术支持。",
     icon: ServerCrash,
     primaryLabel: "返回首页",
+    primaryIcon: Home,
   },
   "maintenance-error": {
     code: "503",
@@ -68,12 +76,14 @@ const errorStates: Record<ErrorKind, ErrorStateConfig> = {
     detail: "维护完成后会自动恢复，你可以稍后刷新页面再试。",
     icon: Wrench,
     primaryLabel: "了解维护状态",
+    primaryIcon: RefreshCw,
   },
 }
 
 export function ErrorState({ kind }: { kind: ErrorKind }) {
   const state = errorStates[kind]
   const Icon = state.icon
+  const PrimaryIcon = state.primaryIcon
 
   function goBack() {
     if (window.history.length > 1) {
@@ -99,20 +109,16 @@ export function ErrorState({ kind }: { kind: ErrorKind }) {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
-      <section className="mx-auto flex w-full max-w-xl flex-col items-center text-center">
-        <div className="mb-8 flex size-16 items-center justify-center rounded-lg border bg-muted">
-          <Icon className="size-8 text-muted-foreground" />
+      <section className="mx-auto flex w-full max-w-md flex-col">
+        <div className="flex items-center gap-2.5">
+          <Icon aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+          <h1 className="text-2xl font-bold tracking-tight">{state.title}</h1>
+          <span className="text-sm font-medium tabular-nums text-muted-foreground">
+            {state.code}
+          </span>
         </div>
-        <div className="text-[88px] font-bold leading-none tracking-tight text-foreground sm:text-[112px]">
-          {state.code}
-        </div>
-        <h1 className="mt-6 text-2xl font-semibold tracking-tight">
-          {state.title}
-        </h1>
-        <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">
-          {state.description}
-          <br />
-          {state.detail}
+        <p className="mt-4 text-sm leading-6 text-muted-foreground">
+          {state.description} {state.detail}
         </p>
         <div className="mt-8 flex flex-col gap-2 sm:flex-row">
           <Button variant="outline" onClick={goBack}>
@@ -120,7 +126,7 @@ export function ErrorState({ kind }: { kind: ErrorKind }) {
             返回上一页
           </Button>
           <Button onClick={goPrimary}>
-            <Home className="size-4" />
+            <PrimaryIcon className="size-4" />
             {state.primaryLabel}
           </Button>
         </div>

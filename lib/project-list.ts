@@ -5,6 +5,8 @@
  * 阶段文案、日期格式、搜索匹配和读取失败提示在这里集中一份，避免三处各写一份后走样。
  */
 
+import { formatDate } from "./format-datetime"
+
 /** 项目流水线的阶段取值；顺序即推进顺序。 */
 export const PROJECT_STAGE_LABELS: Record<string, string> = {
   new: "新建跟进",
@@ -24,16 +26,7 @@ export function projectStageLabel(stage: string | null | undefined) {
 
 /** 三个列表页统一的日期显示（年/月/日）。 */
 export function formatProjectDate(value: string | undefined | null) {
-  if (!value) return "-"
-
-  const date = new Date(value)
-  if (!Number.isFinite(date.getTime())) return "-"
-
-  return new Intl.DateTimeFormat("zh-CN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date)
+  return formatDate(value)
 }
 
 /**

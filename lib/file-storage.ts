@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises"
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
 
 /**
@@ -136,6 +136,26 @@ async function blobSave(input: SaveFileInput): Promise<StoredFile> {
 }
 
 /** 读取本地存储的文件；路径不合法或文件不存在返回 null，不抛错给调用方。 */
+/**
+ * 只判断「本机存储里有没有这个文件」，不读内容。
+ *
+ * 为什么需要：官方同步时，产品图片地址是站内路径（`/assets/...` 或 `/api/files/...`），
+ * 设备本地可能还没取过这张图。要区分「已经取过」和「还没取过」，就得看文件在不在——
+ * 只看地址前缀会把没取过的当成已取过，图就永远补不上。
+ */
+export async function localFileExists(urlOrPathname: string): Promise<boolean> {
+  const pathname = urlOrPathname.startsWith(LOCAL_FILE_PREFIX)
+    ? urlOrPathname.slice(LOCAL_FILE_PREFIX.length)
+    : urlOrPathname
+  if (!pathname || pathname.includes("..") || pathname.startsWith("/")) return false
+  try {
+    const info = await stat(path.join(storageRoot(), pathname))
+    return info.isFile()
+  } catch {
+    return false
+  }
+}
+
 export async function readLocalFile(pathname: string): Promise<{ bytes: Buffer; contentType: string } | null> {
   if (selectedProvider() !== "local") return null
   try {

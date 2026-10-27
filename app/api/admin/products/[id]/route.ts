@@ -24,6 +24,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       image: body.image ? String(body.image) : null,
       name: String(body.name ?? ""),
       platform: body.platform ? String(body.platform) : null,
+      series: body.series === undefined ? undefined : body.series === null ? null : String(body.series),
+      platforms: Array.isArray(body.platforms) ? body.platforms.map(String) : undefined,
       price: Number(body.price ?? 0),
       productId: id,
       sku: String(body.sku ?? ""),

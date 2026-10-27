@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { toast } from "sonner"
-import { Loader2, Sparkles, Zap } from "lucide-react"
+import { Loader2 } from "lucide-react"
 
 import {
   QUICK_MODULES,
@@ -115,10 +115,7 @@ export function QuickQuoteDialog({ projectId, open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="size-5" />
-            快速报价
-          </DialogTitle>
+          <DialogTitle>快速报价</DialogTitle>
           <DialogDescription>
             选择智能平台、套餐档次与户型规模，按内置套餐预填报价，已勾选模块默认全部包含，可按需取消。
           </DialogDescription>
@@ -152,14 +149,11 @@ export function QuickQuoteDialog({ projectId, open, onOpenChange }: Props) {
                     type="button"
                     onClick={() => setTier(option.value)}
                     className={cn(
-                      "flex flex-col gap-1 rounded-lg border p-3 text-start transition",
-                      active ? "border-primary bg-primary/5 ring-2 ring-primary/30" : "hover:bg-muted/40",
+                      "flex flex-col gap-1 rounded-md border p-3 text-start transition",
+                      active ? "border-primary bg-primary/5" : "hover:bg-muted/40",
                     )}
                   >
-                    <div className="flex items-center gap-2">
-                      <Zap className="size-4" />
-                      <span className="font-medium">{option.label}</span>
-                    </div>
+                    <span className="font-medium">{option.label}</span>
                     <div className="text-xs text-muted-foreground">{option.description}</div>
                   </button>
                 )
@@ -208,7 +202,7 @@ export function QuickQuoteDialog({ projectId, open, onOpenChange }: Props) {
                     key={entry.key}
                     className={cn(
                       "flex cursor-pointer items-center justify-between gap-2 rounded-md border p-2 text-sm transition",
-                      checked ? "bg-primary/5" : "opacity-60 hover:bg-muted/40",
+                      checked ? "bg-primary/5" : "border-dashed hover:bg-muted/40",
                     )}
                   >
                     <div className="flex items-center gap-2">
@@ -240,7 +234,7 @@ export function QuickQuoteDialog({ projectId, open, onOpenChange }: Props) {
             取消
           </Button>
           <Button onClick={handleSubmit} disabled={saving || modules.size === 0}>
-            {saving ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+            {saving ? <Loader2 className="size-4 animate-spin" /> : null}
             生成报价
           </Button>
         </DialogFooter>

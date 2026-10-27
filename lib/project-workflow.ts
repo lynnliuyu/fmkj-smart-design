@@ -1,6 +1,6 @@
 import { canCreatePersonalProject, requireAccountPermission } from "./account-gates"
-import type { AccountContext } from "./account-context"
-import { resolveProjectOwnerScope, type ProjectOwnerScope } from "./project-access"
+import { accountContextCan, type AccountContext } from "./account-context"
+import { canWriteProjectMembership, resolveProjectOwnerScope, type ProjectMembershipAccess, type ProjectOwnerScope } from "./project-access"
 import { resolveProjectStage, type ProjectStageResolution } from "./project-stage"
 import { rememberProjectCommunity } from "./project-options"
 import type { ProjectRiskLevel, ProjectWaitingOn } from "./project-workbench"
@@ -150,7 +150,7 @@ export type ProjectCreateRecordInput = {
 }
 
 export type ProjectWorkflowRepository = {
-  canAccessProject(projectId: string, context: AccountContext): Promise<boolean>
+  getProjectAccess(projectId: string, context: AccountContext): Promise<ProjectMembershipAccess | null>
   countActivePersonalProjects(userId: string): Promise<number>
   createProject(input: ProjectCreateRecordInput): Promise<ProjectRecord>
   getProjectForStageUpdate(projectId: string): Promise<{
@@ -294,6 +294,9 @@ export class ProjectWorkflow {
     if (!context) {
       throw new ProjectWorkflowError("UNAUTHORIZED", 401)
     }
+    if (context.account.status !== "active") throw new ProjectWorkflowError("ACCOUNT_DISABLED", 403)
+    // Expired subscriptions retain read access; account permission gates below are for writes.
+    if (!accountContextCan(context, "project.view")) throw new ProjectWorkflowError("PROJECT_VIEW_REQUIRED", 403)
 
     const projects = await this.repository.listVisibleProjects(context)
 
@@ -521,7 +524,8 @@ export class ProjectWorkflow {
       throw new ProjectWorkflowError("UNAUTHORIZED", 401)
     }
 
-    if (!(await this.repository.canAccessProject(projectId, context))) {
+    const access = await this.repository.getProjectAccess(projectId, context)
+    if (!access) {
       throw new ProjectWorkflowError("RESOURCE_NOT_FOUND_OR_NOT_OWNED", 404)
     }
 
@@ -532,6 +536,9 @@ export class ProjectWorkflow {
         editGate.reason === "NOT_AUTHENTICATED" ? 401 : 403,
         editGate.reason,
       )
+    }
+    if (!canWriteProjectMembership(context, access)) {
+      throw new ProjectWorkflowError("PROJECT_READ_ONLY", 403)
     }
   }
 }

@@ -1,4 +1,5 @@
 import { defaultSellingPrice } from "./product-pricing"
+import { lineAmount } from "./money"
 import { createQuoteLine } from "./quote-point-map-command"
 import type { PointMapQuoteSnapshot, QuoteDraftItem } from "./quote-draft"
 import type { QuoteItemPayload } from "./quote-save"
@@ -278,11 +279,11 @@ export function createLine(product: QuoteProductOption, room: string, quantity =
 }
 
 export function lineTotal(item: QuoteLineItem) {
-  return item.price * item.quantity * (item.discount / 100)
+  return lineAmount(item.price, item.quantity, item.discount)
 }
 
 export function quoteUnitPrice(item: QuoteLineItem) {
-  return item.price > 0 ? money(item.price * (item.discount / 100)) : "待核价"
+  return item.price > 0 ? money(lineAmount(item.price, 1, item.discount)) : "待核价"
 }
 
 export function productPrice(item: QuoteProductOption) {

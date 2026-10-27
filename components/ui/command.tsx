@@ -17,6 +17,9 @@ import {
 } from '@/components/ui/input-group'
 import { SearchIcon, CheckIcon } from "lucide-react"
 
+// CommandDialog 以前直接把 children 放进 DialogContent，没有 Command 根节点。
+// cmdk 的输入框和列表都从 Command 的 context 里取 store，缺了根节点一点开就报
+// 「Cannot read properties of undefined (reading 'subscribe')」。这里补上根节点。
 function Command({
   className,
   ...props
@@ -59,7 +62,7 @@ function CommandDialog({
         )}
         showCloseButton={showCloseButton}
       >
-        {children}
+        <Command>{children}</Command>
       </DialogContent>
     </Dialog>
   )

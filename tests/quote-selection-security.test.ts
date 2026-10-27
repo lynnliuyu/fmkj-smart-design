@@ -213,7 +213,7 @@ describe("quote history protection through the save interface", () => {
       ...frozen, image: refreshProductImages ? "/new-catalog-image.svg" : "/issued-photo.png",
     })
     expect(client.quoteWrites[0][4]).toBe(325)
-    expect(client.quoteWrites[0][9]).toBe(284.375)
+    expect(client.quoteWrites[0][9]).toBe(284.38)   // 325 × 87.5% 取整到分
     expect(client.quoteWrites[0][10]).toBe(160)
     expect(client.storedRevision).toBe(8)
   })
@@ -228,7 +228,7 @@ describe("quote history protection through the save interface", () => {
     expect(stored.image).not.toBe(client.products[0].image)
     expect(client.quoteWrites[0][6]).toBe("改名后的房间")
     expect(client.quoteWrites[0][4]).toBe(325)
-    expect(client.quoteWrites[0][9]).toBe(284.375)
+    expect(client.quoteWrites[0][9]).toBe(284.38)   // 325 × 87.5% 取整到分
     expect(client.quoteWrites[0][10]).toBe(160)
     expect(client.released).toBe(true)
   })
@@ -257,7 +257,7 @@ describe("quote history protection through the save interface", () => {
     const stored = JSON.parse(String(client.quoteWrites[0][17]))
     expect(stored).toMatchObject({ sku: "CURRENT-3N", mappingRevision: 3, pointMapRevision: 8, image: "/new-catalog-image.svg", category: "开关" })
     expect(client.quoteWrites[0][4]).toBe(325)
-    expect(client.quoteWrites[0][9]).toBe(284.375)
+    expect(client.quoteWrites[0][9]).toBe(284.38)   // 325 × 87.5% 取整到分
     expect(client.quoteWrites[0][10]).toBe(160)
   })
 })

@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   FileText,
   FolderKanban,
-  Images,
   Loader2,
   MapPinned,
   MoreHorizontal,
@@ -24,7 +23,7 @@ import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
@@ -255,6 +254,9 @@ function ProjectOverviewCard({
   showBasicDetails: boolean
 }) {
   const risk = project.riskLevel ?? project.risk
+  const stageLabel = stageLabels[project.stage] ?? project.stage
+  const stageStatus = project.stageStatusLabel?.trim()
+  const waitingLabel = project.waitingOn && project.waitingOn !== "none" ? waitingOnLabel(project.waitingOn) : ""
   const [isEditing, setIsEditing] = React.useState(false)
 
   return (
@@ -262,32 +264,29 @@ function ProjectOverviewCard({
       <CardHeader className="gap-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline">{stageLabels[project.stage] ?? project.stage}</Badge>
-              {project.stageStatusLabel ? <Badge variant="secondary">{project.stageStatusLabel}</Badge> : null}
-              {/* 「正常」是默认值，不占位；只有需关注 / 阻塞才显示。 */}
+            <CardTitle className="text-2xl">{project.name}</CardTitle>
+            {/* 状态写在标题下方，不再用标题上方的胶囊；每行只在会变、且要看的时候才出现。 */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
+              <span>
+                {stageLabel} · <span className="tabular-nums">{project.code}</span>
+              </span>
+              {stageStatus && stageStatus !== stageLabel ? <Badge variant="secondary">{stageStatus}</Badge> : null}
               {risk !== "normal" ? (
                 <Badge variant={risk === "blocked" ? "destructive" : "secondary"}>{riskLabel(risk)}</Badge>
               ) : null}
+              {waitingLabel ? <Badge variant="secondary">等待{waitingLabel}</Badge> : null}
             </div>
-            <div>
-              <CardTitle className="text-2xl">{project.name}</CardTitle>
-              <div className="mt-1 text-sm text-muted-foreground">{project.code}</div>
-            </div>
+            {project.riskReason?.trim() ? (
+              <p className="text-sm text-destructive-strong">{project.riskReason}</p>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button asChild>
               <Link href={`/point-map?projectId=${encodeURIComponent(project.id)}`}>
                 <MapPinned className="size-4" />
-                继续方案报价
+                继续点位设计
               </Link>
             </Button>
-            {showBasicDetails ? (
-              <Button variant="outline" onClick={() => setIsEditing(true)}>
-                <Pencil className="size-4" />
-                编辑资料
-              </Button>
-            ) : null}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline">
@@ -334,9 +333,9 @@ function ProjectOverviewCard({
       </CardHeader>
 
       {showBasicDetails ? (
-        <CardContent className="grid gap-3">
-          <div className="text-xs font-medium text-muted-foreground">基础资料</div>
-          <ProjectDetailsSummary project={project} />
+        <CardContent className="grid gap-4">
+          <NextActionPanel project={project} />
+          <ProjectDetailsSummary project={project} onEdit={() => setIsEditing(true)} />
         </CardContent>
       ) : null}
 
@@ -367,13 +366,32 @@ function ProjectOverviewCard({
 type ProjectDetailRow = {
   label: string
   value: string | null | undefined
-  wide?: boolean
 }
 
-function ProjectDetailsSummary({ project }: { project: Project }) {
-  const risk = project.riskLevel ?? project.risk
+/** 「下一步」是这一页最该先看到的一句话：卡在哪、什么时候、谁去推。 */
+function NextActionPanel({ project }: { project: Project }) {
+  const dueDate = formatDateInput(project.nextActionDueAt)
+  const nextOwner = project.nextActionOwnerName?.trim()
+  const meta = [
+    dueDate ? `截止 ${dueDate}` : "",
+    nextOwner && nextOwner !== project.owner ? `下一步负责人 ${nextOwner}` : "",
+  ].filter(Boolean)
+
+  return (
+    <div className="rounded-lg bg-muted/50 px-4 py-3">
+      <div className="text-xs font-medium text-muted-foreground">下一步</div>
+      <p className="mt-1 text-sm font-medium">
+        {project.nextAction?.trim() || "尚未填写下一步动作，点「编辑资料」补上。"}
+      </p>
+      {meta.length ? <p className="mt-1 text-xs text-muted-foreground">{meta.join(" · ")}</p> : null}
+    </div>
+  )
+}
+
+/** 只渲染真的填过的字段；空字段、占位串不占行，也不显示「-」。 */
+function ProjectDetailsSummary({ project, onEdit }: { project: Project; onEdit: () => void }) {
   const rows: ProjectDetailRow[] = [
-    // 项目名已经在卡片标题上，这里不再重复。
+    // 项目名、阶段、下一步已经在卡片标题与上方突出块里，这里不再重复。
     { label: "客户姓名", value: project.customer },
     { label: "联系电话", value: project.phone },
     { label: "小区名", value: project.community },
@@ -382,23 +400,30 @@ function ProjectDetailsSummary({ project }: { project: Project }) {
     { label: "地址", value: project.address },
     { label: "负责人", value: project.owner },
     { label: "系统平台", value: project.platform },
-    { label: "下一步截止", value: formatDateInput(project.nextActionDueAt) },
-    { label: "下一步负责人", value: project.nextActionOwnerName || project.owner },
-    { label: "等待对象", value: waitingOnLabel(project.waitingOn) },
-    { label: "下一步", value: project.nextAction, wide: true },
-    { label: "风险原因", value: project.riskReason || (risk === "normal" ? "暂无风险" : "待补充原因"), wide: true },
-    { label: "截止说明", value: project.dueNote, wide: true },
-  ]
+  ].filter((row) => row.value?.trim())
 
   return (
-    <dl className="grid gap-x-6 gap-y-4 md:grid-cols-2">
-      {rows.map((row) => (
-        <div key={row.label} className={row.wide ? "grid gap-1 md:col-span-2" : "grid gap-1"}>
-          <dt className="text-xs text-muted-foreground">{row.label}</dt>
-          <dd className="text-sm break-words">{row.value?.trim() ? row.value : "-"}</dd>
-        </div>
-      ))}
-    </dl>
+    <div className="grid gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="text-xs font-medium text-muted-foreground">基础资料</div>
+        <Button variant="outline" size="sm" onClick={onEdit}>
+          <Pencil className="size-4" />
+          编辑资料
+        </Button>
+      </div>
+      {rows.length ? (
+        <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">
+          {rows.map((row) => (
+            <div key={row.label} className="grid gap-1">
+              <dt className="text-xs text-muted-foreground">{row.label}</dt>
+              <dd className="text-sm break-words">{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="text-sm text-muted-foreground">项目资料还没填，点「编辑资料」补上客户、地址和负责人。</p>
+      )}
+    </div>
   )
 }
 
@@ -504,27 +529,25 @@ function SolutionQuotePanel({ project }: { project: Project }) {
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <CardAction>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => setQuickOpen(true)}>
-                <Sparkles className="size-4" />
-                快速报价
-              </Button>
-              <Button asChild size="sm" variant="outline">
-                <Link href={`/quotes?projectId=${encodeURIComponent(project.id)}`}>
-                  <FileText className="size-4" />
-                  打开报价单
-                </Link>
-              </Button>
-            </div>
-          </CardAction>
-        </CardHeader>
-        <CardContent>
-          <ProjectSavedDesignSummary projectId={project.id} />
-        </CardContent>
-      </Card>
+      {/* 不再套一层卡片：草稿里的楼层缩略图本身就是一个个带描边的块。 */}
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-base font-medium">方案与报价</h2>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => setQuickOpen(true)}>
+              <Sparkles className="size-4" />
+              快速报价
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/quotes?projectId=${encodeURIComponent(project.id)}`}>
+                <FileText className="size-4" />
+                打开报价单
+              </Link>
+            </Button>
+          </div>
+        </div>
+        <ProjectSavedDesignSummary projectId={project.id} />
+      </section>
 
       <QuickQuoteDialog projectId={project.id} open={quickOpen} onOpenChange={setQuickOpen} />
     </>
@@ -617,7 +640,7 @@ function ProjectMembersPanel({ projectId }: { projectId: string }) {
           <div>
             <CardTitle>项目成员授权</CardTitle>
           </div>
-          <Badge variant={access?.canManage ? "default" : "secondary"}>
+          <Badge variant="outline">
             <ShieldCheck className="size-3" />
             {access?.canManage ? "可管理" : "只读"}
           </Badge>
@@ -625,21 +648,20 @@ function ProjectMembersPanel({ projectId }: { projectId: string }) {
       </CardHeader>
       <CardContent className="space-y-3">
         {message ? (
-          <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive-strong">
             {message}
           </div>
         ) : null}
         {access && access.members.length > 0 ? (
-          <div className="divide-y rounded-lg border">
+          // 分组用 1px 分隔线，不再在卡片里再套一层描边容器。
+          <div className="divide-y">
             {access.members.map((member) => (
-              <label key={member.userId} className="flex items-center justify-between gap-3 px-3 py-3">
+              <label key={member.userId} className="flex items-center justify-between gap-3 px-1 py-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{member.name || member.email}</span>
                     <Badge variant="outline">{member.roleName}</Badge>
-                    <Badge variant={member.status === "disabled" ? "secondary" : "outline"}>
-                      {memberStatusLabel(member.status)}
-                    </Badge>
+                    <Badge variant="secondary">{memberStatusLabel(member.status)}</Badge>
                   </div>
                   <div className="mt-1 truncate text-xs text-muted-foreground">{member.email}</div>
                 </div>
@@ -654,9 +676,7 @@ function ProjectMembersPanel({ projectId }: { projectId: string }) {
             ))}
           </div>
         ) : (
-          <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-            这个项目暂无可授权的企业成员。
-          </div>
+          <p className="text-sm text-muted-foreground">这个项目暂无可授权的企业成员。</p>
         )}
       </CardContent>
     </Card>

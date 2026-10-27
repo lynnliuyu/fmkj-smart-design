@@ -15,7 +15,7 @@ import {
   basePermissionsForAccount,
   isPermissionCode,
 } from "./permission-policy"
-import { getPool } from "./server-db"
+import { getPool, hasDatabaseUrl } from "./server-db"
 
 export type AccountContextUser = AuthUser & {
   avatarUrl: string | null
@@ -56,6 +56,7 @@ type DbAccountContextRow = AccountContextUserRecord & {
   account_status?: AccountStatus | null
   account_type?: AccountType | null
   organization_id?: string | null
+  organization_status?: string | null
   organization_name?: string | null
   organization_permissions?: PermissionCode[] | null
   disabled_features?: string[] | null
@@ -78,9 +79,12 @@ export function buildAccountContext(
   const role = normalizeRole(record.role ?? sessionUser.role)
   const persistedAccountType = "account_type" in record ? record.account_type : null
   const accountType = persistedAccountType ?? deriveAccountTypeFromRole(role, organization)
-  const accountStatus = normalizeAccountStatus(
-    ("account_status" in record ? record.account_status : null) ?? record.status
-  )
+  const userStatus = normalizeAccountStatus(record.status)
+  const profileStatus = normalizeAccountStatus("account_status" in record ? record.account_status : null)
+  const organizationStatus = "organization_status" in record ? record.organization_status : null
+  const organizationDisabled = (accountType === "ENTERPRISE_OWNER" || accountType === "ENTERPRISE_MEMBER") &&
+    organizationStatus && organizationStatus !== "active" && organizationStatus !== "expired"
+  const accountStatus = userStatus !== "active" ? userStatus : organizationDisabled ? "disabled" : profileStatus
   const permissions = resolvePermissions(accountType, accountStatus, record)
   const disabledFeatures =
     "disabled_features" in record && record.disabled_features
@@ -116,10 +120,14 @@ export async function getCurrentAccountContext(): Promise<AccountContext | null>
   const sessionUser = await getSessionUser()
   if (!sessionUser) return null
 
+  if (process.env.NODE_ENV === "development" && !hasDatabaseUrl() && sessionUser.userId === "local-admin") {
+    return buildAccountContext(sessionUser)
+  }
+
   const row = await loadAccountContextRow(sessionUser.userId)
 
   if (!row) {
-    return buildAccountContext(sessionUser)
+    return null
   }
 
   return buildAccountContext(sessionUser, row, resolveOrganization(row))
@@ -159,8 +167,9 @@ async function loadAccountContextRow(userId: string): Promise<DbAccountContextRo
         ap.account_status::text as account_status,
         coalesce(org_plan.plan_code, p.plan_code) as plan_code,
         coalesce(org_plan.limits, p.limits) as plan_limits,
-        coalesce(org_sub.status::text, s.status::text) as subscription_status,
+        case when o.status = 'expired' then 'expired' else coalesce(org_sub.status::text, s.status::text) end as subscription_status,
         o.id::text as organization_id,
+        o.status::text as organization_status,
         o.name as organization_name,
         org_role.name as organization_role,
         (
@@ -178,20 +187,27 @@ async function loadAccountContextRow(userId: string): Promise<DbAccountContextRo
         ) as disabled_features
       from users u
       left join account_profiles ap on ap.user_id = u.id
-      left join subscriptions s on s.subject_type = 'user'
-        and s.subject_id = u.id
-        and s.status in ('free', 'active', 'grace_period', 'past_due', 'expired')
+      left join lateral (
+        select * from subscriptions us
+        where us.subject_type = 'user' and us.subject_id = u.id
+          and us.status in ('free', 'active', 'grace_period', 'past_due', 'expired')
+        order by case when us.status = 'expired' then 1 else 0 end, us.created_at desc, us.id desc
+        limit 1
+      ) s on true
       left join plans p on p.id = s.plan_id
       left join organization_members om on om.user_id = u.id
         and om.member_status in ('active', 'invited')
       left join organizations o on o.id = coalesce(ap.organization_id, om.organization_id)
-        and o.status = 'active'
       left join organization_roles org_role on org_role.id = om.role_id
-      left join subscriptions org_sub on org_sub.subject_type = 'organization'
-        and org_sub.subject_id = o.id
-        and org_sub.status in ('active', 'grace_period', 'past_due', 'expired')
+      left join lateral (
+        select * from subscriptions os
+        where os.subject_type = 'organization' and os.subject_id = o.id
+          and os.status in ('active', 'grace_period', 'past_due', 'expired')
+        order by case when os.status = 'expired' then 1 else 0 end, os.created_at desc, os.id desc
+        limit 1
+      ) org_sub on true
       left join plans org_plan on org_plan.id = org_sub.plan_id
-      where u.id = $1
+      where u.id = $1 and u.deleted_at is null
       limit 1
       `,
       [userId]
@@ -242,8 +258,8 @@ function resolvePermissions(
   if (isKnownPlanCode(planCode) && row.plan_limits) {
     const limits = normalizePlanLimits(planCode, row.plan_limits)
     permissions = applyPlanLimitsToPermissions(permissions, limits)
-    permissions = applySubscriptionStatusToPermissions(permissions, row.subscription_status)
   }
+  permissions = applySubscriptionStatusToPermissions(permissions, row.subscription_status)
 
   permissions = applyFeatureFlagLimitsToPermissions(permissions, row.disabled_features ?? [])
 

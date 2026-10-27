@@ -1,0 +1,1007 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>繁梦空间设计站 · 设备版手册</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: #f6f7f9; color: #1f2430;
+  font: 15px/1.75 "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+.layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 28px; max-width: 1240px; margin: 0 auto; padding: 28px; }
+.sidebar { position: sticky; top: 24px; align-self: start; max-height: calc(100vh - 48px); overflow: auto; }
+.sidebar h2 { font-size: 13px; letter-spacing: .04em; color: #6b7484; text-transform: uppercase; margin: 0 0 10px; }
+.sidebar a { display: block; padding: 5px 8px; border-radius: 6px; color: #384152; text-decoration: none; font-size: 13.5px; }
+.sidebar a:hover { background: #eceff4; }
+.sidebar a.lv3 { padding-left: 20px; color: #5b6577; font-size: 13px; }
+main { background: #fff; border: 1px solid #e4e8ee; border-radius: 14px; padding: 32px 36px 48px; min-width: 0; }
+h1 { font-size: 30px; line-height: 1.3; margin: 0 0 6px; }
+h1 + p { color: #6b7484; margin-top: 0; }
+h2 { font-size: 22px; margin: 36px 0 12px; padding-bottom: 8px; border-bottom: 1px solid #eceff4; }
+h3 { font-size: 17px; margin: 26px 0 10px; }
+h4 { font-size: 15px; margin: 20px 0 8px; color: #384152; }
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+li { margin: 4px 0; }
+li.nested { margin-left: 18px; color: #4b5568; }
+a { color: #1a5fd0; }
+code { background: #f2f4f7; border: 1px solid #e4e8ee; border-radius: 5px; padding: 1px 5px; font-size: 13px; font-family: "SF Mono", Menlo, Consolas, monospace; }
+pre.code { background: #161b26; color: #e7ecf5; padding: 14px 16px; border-radius: 10px; overflow: auto; font-size: 13px; line-height: 1.65; }
+pre.code code { background: none; border: 0; color: inherit; padding: 0; }
+blockquote { margin: 14px 0; padding: 12px 16px; background: #f4f7fd; border-left: 3px solid #4d7fd6; border-radius: 0 8px 8px 0; color: #384152; }
+blockquote p { margin: 0; }
+.table-wrap { overflow-x: auto; margin: 14px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { border: 1px solid #e4e8ee; padding: 8px 10px; text-align: left; vertical-align: top; }
+th { background: #f7f9fc; font-weight: 600; }
+tbody tr:nth-child(even) { background: #fcfdfe; }
+hr { border: 0; border-top: 1px solid #eceff4; margin: 28px 0; }
+.anchor { margin-left: 8px; color: #c3cbd8; text-decoration: none; font-weight: 400; opacity: 0; }
+h2:hover .anchor, h3:hover .anchor, h4:hover .anchor { opacity: 1; }
+.status { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 18px 0 6px; }
+.card { border: 1px solid #e4e8ee; border-radius: 12px; padding: 14px 16px; background: #fbfcfe; }
+.card span { display: block; color: #6b7484; font-size: 12.5px; margin-bottom: 4px; }
+.card strong { font-size: 18px; }
+.note { margin-top: 18px; border: 1px solid #f0d9a8; background: #fdf8ec; border-radius: 12px; padding: 14px 16px; }
+.note strong { color: #7a5310; }
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; padding: 16px; }
+  .sidebar { position: static; max-height: none; }
+  main { padding: 22px 18px 32px; }
+}
+@media print {
+  body { background: #fff; }
+  .layout { display: block; max-width: none; padding: 0; }
+  .sidebar, .anchor { display: none; }
+  main { border: 0; border-radius: 0; padding: 0; }
+  h2 { break-after: avoid; }
+  pre.code { background: #f4f6f9; color: #1f2430; border: 1px solid #e4e8ee; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar">
+    <h2>目录</h2>
+    <a class="" href="#我要做什么看哪一节">我要做什么，看哪一节</a>
+<a class="" href="#1-设备上有什么">1. 设备上有什么</a>
+<a class="lv3" href="#11-数据来源默认自带库也可以接你自己的库">1.1 数据来源：默认自带库，也可以接你自己的库</a>
+<a class="" href="#2-首次部署每台新设备一条命令">2. 首次部署（每台新设备：一条命令）</a>
+<a class="lv3" href="#21-标准流程推荐">2.1 标准流程（推荐）</a>
+<a class="lv3" href="#22-手工步骤排障特殊环境用">2.2 手工步骤（排障/特殊环境用）</a>
+<a class="lv3" href="#23-宿主机侧脚本需要-node">2.3 宿主机侧脚本需要 Node</a>
+<a class="lv3" href="#24-母盘批量出货">2.4 母盘（批量出货）</a>
+<a class="" href="#3-发布新版本镜像运营方侧">3. 发布新版本镜像（运营方侧）</a>
+<a class="" href="#4-更新设备">4. 更新设备</a>
+<a class="" href="#41-在线更新客户在页面上点按钮">4.1 在线更新（客户在页面上点按钮）</a>
+<a class="lv3" href="#42-命令更新与定时检查保底">4.2 命令更新与定时检查（保底）</a>
+<a class="lv3" href="#43-管理员页面能看到的更新与备份状态">4.3 管理员页面能看到的更新与备份状态</a>
+<a class="" href="#5-备份与恢复">5. 备份与恢复</a>
+<a class="lv3" href="#51-客户自己在网页上备份与恢复应用内">5.1 客户自己在网页上备份与恢复（应用内）</a>
+<a class="lv3" href="#52-发货前自检一条命令">5.2 发货前自检（一条命令）</a>
+<a class="lv3" href="#53-把产品库搬到设备上可选">5.3 把产品库搬到设备上（可选）</a>
+<a class="lv3" href="#54-把某个项目搬到设备上可选">5.4 把某个项目搬到设备上（可选）</a>
+<a class="" href="#6-让客户在外网访问内网穿透-反向代理-vpn">6. 让客户在外网访问（内网穿透 / 反向代理 / VPN）</a>
+<a class="lv3" href="#61-暴露到公网之前必须做到的几件事">6.1 暴露到公网之前，必须做到的几件事</a>
+<a class="lv3" href="#62-帮客户开通前后各跑一次自检">6.2 帮客户开通前后，各跑一次自检</a>
+<a class="lv3" href="#63-用你的服务器-frp每加一个客户只需一条命令">6.3 用你的服务器 + frp：每加一个客户只需一条命令</a>
+<a class="lv3" href="#64-手工配置参考不用脚本时">6.4 手工配置参考（不用脚本时）</a>
+<a class="" href="#7-登录与上传的守卫2026-10-22-加固">7. 登录与上传的守卫（2026-10-22 加固）</a>
+<a class="" href="#8-对接运营方服务接口收费部分">8. 对接运营方服务（接口收费部分）</a>
+<a class="lv3" href="#81-建议的最小接口形状提案尚未实现">8.1 建议的最小接口形状（提案，尚未实现）</a>
+<a class="lv3" href="#82-当前实现到哪一步2026-10-22">8.2 当前实现到哪一步（2026-10-22）</a>
+<a class="" href="#9-排障">9. 排障</a>
+  </nav>
+  <main>
+    <div class="status">
+      <div class="card"><span>镜像仓库最新版本</span><strong>v0.3.13</strong></div>
+      <div class="card"><span>测试设备当前版本</span><strong>v0.3.13</strong></div>
+      <div class="card"><span>自动化测试</span><strong>1156 个通过</strong></div>
+      <div class="card"><span>生成时间</span><strong>2026/10/22 19:29:17</strong></div>
+    </div>
+    <div class="note">
+      <strong>先看这里：</strong>下面第一张表是「我要做什么 → 看哪一节」。
+      这份页面由 <code>node scripts/build-appliance-handbook.mjs</code> 生成；
+      内容来自仓库里的 <code>docs/local-appliance-deployment.md</code>，改文档后重新生成即可。
+      需要纸质版就按 Ctrl/Cmd + P，侧边目录会自动隐藏。
+    </div>
+
+<h1 id="本地设备版部署与更新">本地设备版部署与更新<a class="anchor" href="#本地设备版部署与更新" aria-label="链接到此节">#</a></h1>
+<p>适用形态：<strong>本地设备版 + 自建开源</strong>（ADR 0010）。官方产品库 / 接口按订阅收费，属独立流程。</p>
+<p>本文是操作说明；领域规则以 <code>CONTEXT.md</code> 与 <code>docs/adr/</code> 为准，执行状态记在 <code>plans/033</code>。</p>
+<blockquote>状态（2026-10-22）：已在<strong>真实设备</strong>（黑豹 X2 / RK3566 / arm64 / Armbian 26.11，与出货同型号） 上跑通：一条命令装机、页面点按钮在线更新（v0.1.4 → v0.3.8 连续多次）、母盘清数据与首次开机 初始化、客户自助备份与恢复、报价单品牌（公司名/logo/联系方式/地址/二维码）。 具体证据、真机上暴露并修掉的问题见 <code>plans/033</code>。</blockquote>
+<h2 id="我要做什么看哪一节">我要做什么，看哪一节<a class="anchor" href="#我要做什么看哪一节" aria-label="链接到此节">#</a></h2>
+<div class="table-wrap"><table><thead><tr>
+<th>我要做的事</th>
+<th>看这里</th>
+</tr></thead><tbody>
+<tr>
+<td>装一台新设备（零散几台）</td>
+<td><a href="#21-标准流程推荐">2.1 标准流程</a></td>
+</tr>
+<tr>
+<td>批量出货（一次刷多台）</td>
+<td><a href="#24-母盘批量出货">2.4 母盘</a></td>
+</tr>
+<tr>
+<td>出一版新镜像（发新版）</td>
+<td><a href="#3-发布新版本镜像运营方侧">3. 发布新版本镜像</a></td>
+</tr>
+<tr>
+<td>客户要更新设备</td>
+<td><a href="#41-在线更新客户在页面上点按钮">4.1 在线更新</a>（客户自己点按钮）</td>
+</tr>
+<tr>
+<td>页面打不开，用命令更新</td>
+<td><a href="#42-命令更新与定时检查保底">4.2 命令更新与定时检查</a></td>
+</tr>
+<tr>
+<td>备份 / 恢复客户数据</td>
+<td><a href="#5-备份与恢复">5. 备份与恢复</a></td>
+</tr>
+<tr>
+<td>发货前自检</td>
+<td><a href="#52-发货前自检一条命令">5.2 发货前自检</a></td>
+</tr>
+<tr>
+<td>客户要在外网用（内网穿透）</td>
+<td><a href="#6-让客户在外网访问内网穿透-反向代理-vpn">6. 让客户在外网访问</a></td>
+</tr>
+<tr>
+<td>设备出问题了</td>
+<td><a href="#9-排障">9. 排障</a></td>
+</tr>
+</tbody></table></div>
+<h2 id="1-设备上有什么">1. 设备上有什么<a class="anchor" href="#1-设备上有什么" aria-label="链接到此节">#</a></h2>
+<pre class="code"><code>宿主机
+├── /opt/fmkj/app                部署目录（compose + 配置 + 宿主机侧脚本；不必是 git 检出）
+│   ├── docker-compose.appliance.yml              默认：自带库
+│   ├── docker-compose.appliance-external-db.yml  可选：接你自己的 PostgreSQL（见 1.1）
+│   ├── .env                     compose 插值：跑哪一版镜像（不进版本库）
+│   ├── .env.production          业务配置（不进版本库）
+│   ├── scripts/deploy/          更新与备份脚本
+│   ├── deploy-state/            更新锁与 update-state.json
+│   └── backups/appliance/       备份产出
+├── /opt/fmkj/tools/node         宿主机侧脚本用的 Node 运行时（设备通常不自带 Node）
+├── Docker
+│   ├── fmkj-v3                  业务容器（不含 docker socket，不发布数据库端口）
+│   ├── fmkj-v3-db               业务库 PostgreSQL，数据卷 fmkj-v3-db
+│   └── fmkj-v3-uploads          上传附件数据卷
+└── systemd（可选）
+    ├── fmkj-update.timer        定时检查更新（只提醒，不自动跨版本升级）
+    └── fmkj-backup.timer        定时备份</code></pre>
+<p>设备上需要三个镜像，缺一不可：</p>
+<div class="table-wrap"><table><thead><tr>
+<th>镜像</th>
+<th>用途</th>
+</tr></thead><tbody>
+<tr>
+<td>业务镜像（如 <code>&lt;仓库&gt;/fmkj-v3:v0.1.0</code>）</td>
+<td>应用本体，同时提供迁移/建管理员脚本</td>
+</tr>
+<tr>
+<td><code>postgres:17-alpine</code></td>
+<td>业务库；<code>deploy:backup</code> 与更新校验也用它</td>
+</tr>
+<tr>
+<td><code>alpine</code></td>
+<td>备份时打包上传卷</td>
+</tr>
+</tbody></table></div>
+<p>黑豹 X2 实测<strong>拉不通 Docker Hub</strong>（<code>registry-1.docker.io</code> 超时），所以这三个镜像要么来自设备 能访问的自建仓库，要么用 <code>docker save</code> / <code>docker load</code> 离线导入。</p>
+<p>附件存储：<code>FILE_STORAGE=local</code>（默认）把上传文件写进 <code>fmkj-v3-uploads</code> 数据卷，浏览器通过受鉴权的 <code>/api/files/&lt;kind&gt;/&lt;ownerId&gt;/&lt;文件名&gt;</code> 读取；设为 <code>blob</code> 才走 Vercel Blob 的公网 URL。 <strong>备份必须包含数据库与这个卷</strong>，否则恢复后附件全丢。</p>
+<p>三条硬约束（ADR 0010）：</p>
+<ol>
+<li><strong>业务容器不持有 docker socket</strong>，更新由宿主机脚本执行。</li>
+<li><strong>软件升级 / 产品库同步 / 业务备份是三个独立流程</strong>，不互相触发。</li>
+<li><strong>数据库结构变化后，恢复不能只靠切回旧镜像</strong>。</li>
+</ol>
+<h3 id="11-数据来源默认自带库也可以接你自己的库">1.1 数据来源：默认自带库，也可以接你自己的库<a class="anchor" href="#11-数据来源默认自带库也可以接你自己的库" aria-label="链接到此节">#</a></h3>
+<p>设备默认<strong>自带业务库</strong>（<code>docker-compose.appliance.yml</code> 里的 <code>postgres</code> 服务），开箱即用、断网可用。 如果客户/公司已经有自己的 PostgreSQL，就换成 <code>docker-compose.appliance-external-db.yml</code>： 同一套业务核心，只是把数据放在外部库里。</p>
+<div class="table-wrap"><table><thead><tr>
+<th></th>
+<th>默认：自带库</th>
+<th>可选：外部库</th>
+</tr></thead><tbody>
+<tr>
+<td>编排文件</td>
+<td><code>docker-compose.appliance.yml</code></td>
+<td><code>docker-compose.appliance-external-db.yml</code></td>
+</tr>
+<tr>
+<td>数据库</td>
+<td>设备上的 <code>fmkj-v3-db</code> 容器 + <code>fmkj-v3-db</code> 卷</td>
+<td>你自己的 PostgreSQL（<code>.env.production</code> 的 <code>DATABASE_URL</code>）</td>
+</tr>
+<tr>
+<td><code>.env.production</code></td>
+<td><code>DATABASE_URL</code> + <code>POSTGRES_USER/PASSWORD/DB</code>（口令一致）</td>
+<td>只要 <code>DATABASE_URL</code> 指向外部库，不需要 <code>POSTGRES_*</code></td>
+</tr>
+<tr>
+<td>备份</td>
+<td>进数据库容器 dump（不需要连接串）</td>
+<td>宿主机侧用 <code>postgres:17-alpine</code> 里的 <code>pg_dump</code> 连外部库（设备要有该镜像且能直连该库）</td>
+</tr>
+<tr>
+<td>数据运维</td>
+<td>由设备维护（备份、恢复、扩容都在设备上）</td>
+<td>由那个库的使用者负责；设备只连过去</td>
+</tr>
+<tr>
+<td>2026-10-21 真机验证</td>
+<td>首次部署、备份、真实恢复、更新</td>
+<td>迁移、启动、<code>/login</code> 200、备份</td>
+</tr>
+</tbody></table></div>
+<p><strong>两种模式互斥</strong>：两者用同一个项目名与同一个容器名（<code>fmkj-v3</code>），切到外部库模式会<strong>重建</strong>应用容器。 自带库的数据卷不会被动到，切回来数据仍在（实测：切回后 users=1、26 条迁移账本不变）。 切换步骤就是把对应的编排文件当作 <code>/opt/fmkj/app</code> 下的 <code>docker-compose.appliance.yml</code> 使用， <code>up -d</code> 一次，再按第 5 节验证；更新脚本用 <code>--compose-file</code> 指向当前在用的那一份。</p>
+<p>第三类数据来源是<strong>官方产品资料接口</strong>（订阅制）：设备定期取增量、失败时本地照常可用， <strong>代码尚未实现</strong>，合同见第 8 节。业务数据（客户项目、点位、报价、交付、附件）按 ADR 0010 <strong>不经过任何上游接口</strong>，只在设备本地或你指定的数据库里。</p>
+<h2 id="2-首次部署每台新设备一条命令">2. 首次部署（每台新设备：一条命令）<a class="anchor" href="#2-首次部署每台新设备一条命令" aria-label="链接到此节">#</a></h2>
+<h3 id="21-标准流程推荐">2.1 标准流程（推荐）<a class="anchor" href="#21-标准流程推荐" aria-label="链接到此节">#</a></h3>
+<pre class="code"><code># 0) 按你现有的刷法刷好系统（Armbian，与本机同型号），接上网线，记下设备 IP。
+# 1) 把装机包拷过去（U 盘或 scp 都行；包约 400KB，镜像由设备自己从你的仓库拉）
+scp fmkj-install-v0.3.5.tar.gz root@&lt;设备IP&gt;:/tmp/
+ssh root@&lt;设备IP&gt;
+mkdir -p /tmp/fmkj-bundle &amp;&amp; tar xzf /tmp/fmkj-install-v0.3.5.tar.gz -C /tmp/fmkj-bundle
+
+# 2) 一条命令装机（把 &lt;自建仓库&gt; 换成你的镜像仓库地址）
+cd /tmp/fmkj-bundle &amp;&amp; bash install-appliance.sh \
+  --registry &lt;自建仓库&gt;/fmkj-v3 --version v0.3.5
+
+# 3) 交付：浏览器打开 http://&lt;设备IP&gt;:3000
+#    第一次打开会让客户自己设置管理员账号（名字、邮箱、密码），设完直接进入工作台。</code></pre>
+<p>装机包怎么来（运营方侧，每出一版打一个）：</p>
+<pre class="code"><code>node scripts/deploy/make-install-bundle.mjs --version v0.3.5
+# → dist/fmkj-install-v0.3.5.tar.gz</code></pre>
+<p>脚本按顺序做九件事，每步都会打印结果：</p>
+<div class="table-wrap"><table><thead><tr>
+<th>步骤</th>
+<th>做了什么</th>
+</tr></thead><tbody>
+<tr>
+<td>1</td>
+<td>检查环境：root、docker 在不在、磁盘够不够、容器名有没有被别的项目占用</td>
+</tr>
+<tr>
+<td>2</td>
+<td>建目录，放好编排与宿主机脚本</td>
+</tr>
+<tr>
+<td>3</td>
+<td>生成 <code>.env</code> 与 <code>.env.production</code>（数据库密码与会话密钥都是现场随机生成，不经过任何人）</td>
+</tr>
+<tr>
+<td>4</td>
+<td>宿主机侧的 Node（跑更新脚本要用；系统自带 ≥22 就用系统的）</td>
+</tr>
+<tr>
+<td>5</td>
+<td>从你的仓库拉镜像</td>
+</tr>
+<tr>
+<td>6</td>
+<td>起数据库</td>
+</tr>
+<tr>
+<td>7</td>
+<td>建表（迁移）</td>
+</tr>
+<tr>
+<td>8</td>
+<td>起应用，装更新管家与每日检查（systemd，开机自启）</td>
+</tr>
+<tr>
+<td>9</td>
+<td>自检：站点、初始化状态、未登录必须被拦；<strong>不过会以非 0 退出并写明「先别交付」</strong></td>
+</tr>
+</tbody></table></div>
+<p><strong>管理员账号不在这里创建</strong>：设备出厂时数据库是空的，客户第一次打开页面自己设，我们不经手客户的密码。</p>
+<h3 id="22-手工步骤排障特殊环境用">2.2 手工步骤（排障/特殊环境用）<a class="anchor" href="#22-手工步骤排障特殊环境用" aria-label="链接到此节">#</a></h3>
+<p>装机脚本就是下面这些命令的封装；脚本在某一步失败时，可以照这里手工接着做：</p>
+<pre class="code"><code># 1) 目录与配置
+mkdir -p /opt/fmkj/app &amp;&amp; cd /opt/fmkj/app
+cp &lt;仓库&gt;/docker-compose.appliance.yml .
+cp &lt;仓库&gt;/.env.appliance.example .env                     # 镜像地址、绑定地址
+cp &lt;仓库&gt;/.env.production.example .env.production         # 必填见下
+chmod 600 .env.production
+
+# .env.production 必填：DATABASE_URL、DATABASE_SSL=false、AUTH_SECRET（openssl rand -base64 32）、
+# POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB（与 DATABASE_URL 一致）；AUTH_DEV_MODE 必须关闭。
+
+# 2) 镜像就位（二选一）
+docker pull &lt;自建仓库&gt;/fmkj-v3:v0.1.0 &amp;&amp; docker tag &lt;自建仓库&gt;/fmkj-v3:v0.1.0 fmkj-v3:v0.1.0
+# 离线：docker load &lt; fmkj-images.tar.gz
+# 若 postgres / alpine 也要从自建仓库取，就把 POSTGRES_IMAGE 指向镜像副本（见 .env.appliance.example）。
+
+# 3) 起库 → 建表 → 第一个管理员 → 起应用
+docker compose -f docker-compose.appliance.yml up -d postgres
+docker compose -f docker-compose.appliance.yml run --rm app node scripts/run-migration.mjs
+docker compose -f docker-compose.appliance.yml run --rm app node scripts/seed-admin.mjs \
+  --email=you@example.com --password='你的密码'
+docker compose -f docker-compose.appliance.yml up -d
+curl -fsS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000/login   # 期望 200</code></pre>
+<p>局域网访问：默认 <code>FMKJ_BIND=0.0.0.0</code>，浏览器打开 <code>http://&lt;设备IP&gt;:3000</code>。 只想本机访问就设 <code>FMKJ_BIND=127.0.0.1</code>，再用 SSH 端口转发。<strong>不要</strong>为了省事把 <code>AUTH_COOKIE_SECURE</code> 设成 <code>true</code>：那会让浏览器在 http 下不保存会话 Cookie，表现为「登录 提示成功但还是未登录」（用 HTTPS 反代时才需要它）。</p>
+<h3 id="23-宿主机侧脚本需要-node">2.3 宿主机侧脚本需要 Node<a class="anchor" href="#23-宿主机侧脚本需要-node" aria-label="链接到此节">#</a></h3>
+<p><code>scripts/deploy/*.mjs</code> 由宿主机执行（ADR 0010：业务容器不持有 docker socket）， 所以宿主机要有 Node ≥22。设备发行版不一定自带（Armbian 实测没有），可以随设备放一份：</p>
+<pre class="code"><code>mkdir -p /opt/fmkj/tools &amp;&amp; cd /opt/fmkj/tools
+curl -fsSLO https://nodejs.org/dist/v22.23.4/node-v22.23.4-linux-arm64.tar.xz
+tar xJf node-v22.23.4-linux-arm64.tar.xz &amp;&amp; mv node-v22.23.4-linux-arm64 node
+/opt/fmkj/tools/node/bin/node -v</code></pre>
+<p>之后所有宿主机侧命令都用 <code>/opt/fmkj/tools/node/bin/node</code>（或把 <code>bin</code> 加进 PATH）。</p>
+<h3 id="24-母盘批量出货">2.4 母盘（批量出货）<a class="anchor" href="#24-母盘批量出货" aria-label="链接到此节">#</a></h3>
+<p>一台一台跑装机命令还是慢。要批量出货就做一张<strong>母盘</strong>：装好一台母机 → 清数据、清密钥 → 读成镜像 → 之后新设备插卡开机就自己初始化。</p>
+<pre class="code"><code># 在母机上（已按 2.1 装好、建议先升到最新版本）
+bash /opt/fmkj/app/scripts/deploy/prepare-golden.sh --yes
+#   --dry-run 先看它打算删什么；执行完会自动关机
+
+# 用你现有的刷机工具把这张卡 / eMMC 读成镜像 → 刷到新设备
+# 新设备第一次开机会自动：
+#   · 生成这台设备自己的会话密钥与数据库密码
+#   · 重建 SSH 主机密钥（克隆的设备不能共用身份）
+#   · 重建数据库并跑迁移
+#   · 起服务，并去掉「待初始化」标记
+# 之后客户打开 http://&lt;设备IP&gt;:3000，引导他设置管理员账号。</code></pre>
+<p>母盘里<strong>不带</strong>上一台的任何东西：客户项目、报价、交付、附件、备份、日志、密钥全部清掉。 <code>prepare-golden.sh</code> 删数据卷前会核对「这个卷是不是本项目的」，不是就直接停下—— 同一台机器上还跑着别的部署时，不会误删别人的数据。</p>
+<p>首次开机初始化由 <code>fmkj-first-boot.service</code> 负责（装机脚本已经装上并设为开机自启）。 正常安装的设备没有「待初始化」标记，这个服务每次开机只是空转退出，不会动数据。</p>
+<p><strong>别跳过 prepare-golden 直接克隆系统</strong>：那样镜像里带着上一台的会话密钥和客户数据， 下一个客户登录后会看到上一个客户的资料——这是最严重的一类事故。</p>
+<h2 id="3-发布新版本镜像运营方侧">3. 发布新版本镜像（运营方侧）<a class="anchor" href="#3-发布新版本镜像运营方侧" aria-label="链接到此节">#</a></h2>
+<pre class="code"><code># 先在开发机/构建机上传出镜像（工作区必须干净，版本号必须明确）
+node scripts/deploy/build-release.mjs --version v0.2.0 --repository &lt;自建仓库&gt;/fmkj-v3
+# 只会打印命令、不真构建：
+node scripts/deploy/build-release.mjs --version v0.2.0 --repository &lt;自建仓库&gt;/fmkj-v3 --dry-run</code></pre>
+<p>脚本末尾会打印设备上要执行的那条更新命令，复制过去即可。</p>
+<p>顺手生成一页「设备更新操作卡」（A4，给站在设备前面的人照着做，现成的一页在 <code>docs/设备更新操作卡.pdf</code>）：</p>
+<pre class="code"><code>python3 scripts/deploy/make-device-card.py --version v0.2.0 \
+  --repository &lt;自建仓库&gt;/fmkj-v3 --out "docs/设备更新操作卡.docx"
+# 转 PDF：用 LibreOffice Kit 把上面这个 docx 转成 docs/设备更新操作卡.pdf</code></pre>
+<p>卡片里写的失败提示与 <code>update-local.mjs</code> 的真实输出一一对应（成功是 <code>更新完成：&lt;版本&gt;</code>，失败看 <code>处置：abort / restart-previous / stop-for-restore</code>）。<strong>改了脚本的输出措辞，记得同步改卡片。</strong></p>
+<p><strong>构建需要 Docker 至少 4GB 内存。</strong> Docker Desktop 默认常只有 1–2GB，构建会 OOM： 表现是构建卡住几十分钟、Docker 守护进程重启、连同正在跑的容器和开发服务一起被杀。 脚本会先量内存，不够就直接拒绝并告诉你去哪调（设置 → Resources → Memory → 6GB）， 不会硬着头皮把机器拖崩。</p>
+<h2 id="4-更新设备">4. 更新设备<a class="anchor" href="#4-更新设备" aria-label="链接到此节">#</a></h2>
+<pre class="code"><code>cd /opt/fmkj/app
+/opt/fmkj/tools/node/bin/node scripts/deploy/update-local.mjs \
+  --to v0.1.1 \
+  --repository &lt;自建仓库&gt;/fmkj-v3 \
+  --compose-file docker-compose.appliance.yml</code></pre>
+<p>固定顺序：<code>preflight → fetch → backup → migrate → switch → verify</code> （备份放在拉取之后、迁移之前：既不改变「迁移前一定有备份」，又不会因版本号打错留下一堆无谓备份）。</p>
+<ul>
+<li><strong>必须指定版本</strong>，脚本拒绝 <code>latest</code>（无法确认版本、也无法回滚）。</li>
+<li><strong>迁移用新镜像跑</strong>，跑完才切流量（<code>docker compose up -d</code>）。</li>
+<li><strong>switch 成功后会把 <code>FMKJ_IMAGE</code> / <code>FMKJ_VERSION</code> 写回 <code>.env</code></strong>；不写回的话，下次有人直接</li>
+<p><code>docker compose up -d</code> 会按 compose 的兜底值静默退回旧镜像。</p>
+<li><strong>verify</strong> 做三件事：轮询 <code>/login</code> 拿到成功响应（应用在服务）、在容器里读 <code>FMKJ_VERSION</code></li>
+<p>（确认跑的是目标版本）、进数据库容器 <code>select 1</code>（确认迁移后数据库可达）。不依赖任何新开的公开接口。</p>
+<li>全程持有 <code>deploy-state/update.lock</code>，避免两个人同时点。</li>
+<li>数据库不在本编排里（外部库 / 1Panel）时，加 <code>--database-service</code> 指向实际服务名；脚本会退回</li>
+<p>用 <code>docker run</code> 连连接串，这时要保证宿主机到该库的网络可达。</p>
+</ul>
+<p>失败处置按 ADR 0010：</p>
+<div class="table-wrap"><table><thead><tr>
+<th>失败发生在</th>
+<th>处置</th>
+<th>原因</th>
+</tr></thead><tbody>
+<tr>
+<td>迁移之后</td>
+<td><code>stop-for-restore</code></td>
+<td>结构已推进，切回旧镜像不算恢复，必须用备份恢复数据库</td>
+</tr>
+<tr>
+<td>拉取完成之后、迁移之前（含备份失败）</td>
+<td><code>restart-previous</code></td>
+<td>数据库没动，旧镜像继续服务</td>
+</tr>
+<tr>
+<td>更早</td>
+<td><code>abort</code></td>
+<td>什么都没改</td>
+</tr>
+</tbody></table></div>
+<p>状态写在 <code>deploy-state/update-state.json</code>（含失败原因与备份路径）。</p>
+<h2 id="41-在线更新客户在页面上点按钮">4.1 在线更新（客户在页面上点按钮）<a class="anchor" href="#41-在线更新客户在页面上点按钮" aria-label="链接到此节">#</a></h2>
+<p>客户不该敲命令。管理员 →「系统健康」页面上有两个按钮：</p>
+<div class="table-wrap"><table><thead><tr>
+<th>按钮</th>
+<th>做了什么</th>
+</tr></thead><tbody>
+<tr>
+<td>检查有没有新版本</td>
+<td>写一条 <code>check</code> 请求，设备上的更新管家跑一次版本检查，结果 5 秒内回到页面</td>
+</tr>
+<tr>
+<td>立即更新到 vX</td>
+<td>写一条 <code>update</code> 请求（<strong>只有版本号</strong>），管家代跑既有的更新脚本：备份 → 拉镜像 → 迁移 → 切换 → 自检；进度与失败原因写在同一个页面上</td>
+</tr>
+</tbody></table></div>
+<p><strong>首次仍然要用一次命令</strong>：老版本应用里没有按钮，所以第一台（次）升级只能用第 4.2 节的命令； 升级到带按钮的版本、并把更新管家装上之后，后续都点按钮。</p>
+<h3 id="42-命令更新与定时检查保底">4.2 命令更新与定时检查（保底）<a class="anchor" href="#42-命令更新与定时检查保底" aria-label="链接到此节">#</a></h3>
+<h4 id="定时检查新版本只提醒不安装">定时检查新版本（只提醒，不安装）<a class="anchor" href="#定时检查新版本只提醒不安装" aria-label="链接到此节">#</a></h4>
+<p>设备不会自己升级。定时任务只做一件事：问一句「外面有没有比现在新的版本」，把答案写进 <code>deploy-state/update-check.json</code>，管理员在「系统健康」页面看到提示后再人工决定升不升。</p>
+<pre class="code"><code>cd /opt/fmkj/app
+cp &lt;仓库&gt;/deploy/systemd/fmkj-update-check.service /etc/systemd/system/
+cp &lt;仓库&gt;/deploy/systemd/fmkj-update-check.timer   /etc/systemd/system/
+systemctl daemon-reload &amp;&amp; systemctl enable --now fmkj-update-check.timer
+systemctl list-timers fmkj-update-check.timer       # 看下次什么时候跑</code></pre>
+<p>版本从哪里问，写在 <code>/opt/fmkj/app/.env</code> 里（二选一，见 <code>.env.appliance.example</code>）：</p>
+<div class="table-wrap"><table><thead><tr>
+<th>方式</th>
+<th>变量</th>
+<th>说明</th>
+</tr></thead><tbody>
+<tr>
+<td>版本清单 JSON（推荐）</td>
+<td><code>FMKJ_UPDATE_INDEX_URL</code></td>
+<td>你自己维护一个小文件，例如 <code>{"versions":["v0.1.0","v0.1.1"]}</code>；数组或 <code>{"latest":"…"}</code> 也认</td>
+</tr>
+<tr>
+<td>镜像仓库 tag 列表</td>
+<td><code>FMKJ_REGISTRY</code> + <code>FMKJ_REGISTRY_REPOSITORY</code></td>
+<td>不填就从 <code>FMKJ_IMAGE</code> 反推；仓库要登录时补 <code>FMKJ_REGISTRY_USER</code> / <code>FMKJ_REGISTRY_PASSWORD</code>，走 http 时加 <code>FMKJ_REGISTRY_INSECURE=true</code></td>
+</tr>
+</tbody></table></div>
+<p>版本清单也可以签名，避免有人伪造「有新版本」把设备引到恶意镜像上：</p>
+<pre class="code"><code># 运营方侧：给清单签名（私钥只留在自己服务器上）
+node scripts/deploy/sign-version-index.mjs --file versions.json --key release-private.pem
+# → versions.signed.json（{"versions":[...],"signature":"..."}）
+
+# 设备侧：/.env 里配上发布方公钥，此后只认签过名的清单
+# FMKJ_RELEASE_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----..."</code></pre>
+<p>配了公钥但清单没签名、或签名对不上，检查会直接报错并且<strong>不提示升级</strong>——状态文件里 <code>signature</code> 字段会如实记录 <code>verified</code> 或空，管理员页面显示「已验签 / 未签名」。</p>
+<p>不想用定时任务也可以手工查一次，结果同样写进状态文件：</p>
+<pre class="code"><code>/opt/fmkj/tools/node/bin/node scripts/deploy/check-update.mjs
+/opt/fmkj/tools/node/bin/node scripts/deploy/check-update.mjs --json   # 机器可读</code></pre>
+<p>连不上、没配版本来源、清单格式不对都只记在状态文件的 <code>error</code> 里，退出码仍是 0： 设备离线不该让定时任务报警刷屏。</p>
+<h3 id="43-管理员页面能看到的更新与备份状态">4.3 管理员页面能看到的更新与备份状态<a class="anchor" href="#43-管理员页面能看到的更新与备份状态" aria-label="链接到此节">#</a></h3>
+<p><code>docker-compose.appliance*.yml</code> 把宿主机的 <code>./deploy-state</code> 挂进容器（<code>/data/deploy-state</code>）。 其中只有 <code>requests/</code> 子目录属于应用用户（页面写「更新请求」用），其余由宿主机脚本以 root 写、 应用只读。管理后台「管理员 → 系统 → 系统健康」显示三行：</p>
+<div class="table-wrap"><table><thead><tr>
+<th>显示项</th>
+<th>来源文件</th>
+<th>说明</th>
+</tr></thead><tbody>
+<tr>
+<td>版本检查</td>
+<td><code>deploy-state/update-check.json</code></td>
+<td>上次检查时间、有没有新版本、检查失败原因</td>
+</tr>
+<tr>
+<td>上次更新</td>
+<td><code>deploy-state/update-state.json</code></td>
+<td>更新到哪一版、成功还是失败、失败在哪一步</td>
+</tr>
+<tr>
+<td>上次备份</td>
+<td><code>deploy-state/backup-state.json</code></td>
+<td>备份时间、标签、保留份数、是否成功</td>
+</tr>
+</tbody></table></div>
+<p>页面只读：应用不持有 docker socket，不能从网页触发更新或备份（ADR 0010）。它可以展示 失败原因，但会抹掉宿主机上的绝对路径。目录没挂载时页面显示「这不是设备版部署」，不会报错。</p>
+<h4 id="首次安装每台设备一次">首次安装（每台设备一次）<a class="anchor" href="#首次安装每台设备一次" aria-label="链接到此节">#</a></h4>
+<pre class="code"><code># 1) 宿主机侧的脚本与编排（从发布仓库拷最新的那一份）
+cp &lt;仓库&gt;/scripts/deploy/updater-agent.mjs /opt/fmkj/app/scripts/deploy/
+cp &lt;仓库&gt;/docker-compose.appliance.yml /opt/fmkj/app/
+
+# 2) 更新管家（一次性装上，以后开机就常驻）
+cp &lt;仓库&gt;/deploy/systemd/fmkj-updater.service /etc/systemd/system/
+systemctl daemon-reload &amp;&amp; systemctl enable --now fmkj-updater
+systemctl status fmkj-updater --no-pager     # 看到 active (running) 即可
+
+# 3) 版本来源写进 /opt/fmkj/app/.env（管家与检查脚本都读这里）
+#    FMKJ_REGISTRY=&lt;自建仓库&gt;          FMKJ_REGISTRY_REPOSITORY=fmkj-v3
+#    FMKJ_REPOSITORY=&lt;自建仓库&gt;/fmkj-v3
+#    自签证书时：把 CA 放到 /opt/fmkj/app/registry-ca.crt，并取消 unit 里
+#    Environment=NODE_EXTRA_CA_CERTS=... 的注释，然后 systemctl restart fmkj-updater</code></pre>
+<p><strong>没装管家会怎样</strong>：页面会明确提示「已请求更新，但设备上的更新管家没有响应」——不会一直转圈， 也不会假装成功。这种情况下用第 4.2 节的命令更新，或者把管家装上。</p>
+<h4 id="安全边界为什么按钮不是应用自己去装">安全边界（为什么按钮不是应用自己去装）<a class="anchor" href="#安全边界为什么按钮不是应用自己去装" aria-label="链接到此节">#</a></h4>
+<p>应用被故意关在隔离容器里：没有 docker socket、不能执行宿主机命令（ADR 0010）。所以应用能做的只有 「把版本号写成一个请求文件」；管家只认版本号这一个输入，只调用仓库里固定的两个脚本（参数用数组传， 不拼 shell）。网页即使被攻破，最多也只能触发一次「安装某个正式发布的版本」，无法变成任意命令执行。</p>
+<p><strong>上一次更新被断电打断怎么办</strong>：如果锁还在、进程已经没了，且数据库迁移<strong>已经跑过</strong>，管家会拒绝 自动重试并写明原因（数据库结构已经是新版本，只能人工用备份恢复）；如果中断发生在迁移之前，管家会 清掉锁放行重试。所有过程写在 <code>deploy-state/updater-log.txt</code>，排障先看这个文件。</p>
+<h2 id="5-备份与恢复">5. 备份与恢复<a class="anchor" href="#5-备份与恢复" aria-label="链接到此节">#</a></h2>
+<pre class="code"><code>cd /opt/fmkj/app
+export FMKJ_UPLOADS_VOLUME=fmkj-v3-uploads      # 与编排里的卷名一致
+/opt/fmkj/tools/node/bin/node scripts/deploy/backup-local.mjs \
+  --label nightly --keep 7 --compose-file docker-compose.appliance.yml</code></pre>
+<p>产出 <code>backups/appliance/&lt;时间戳&gt;-&lt;标签&gt;/</code>：</p>
+<div class="table-wrap"><table><thead><tr>
+<th>文件</th>
+<th>内容</th>
+</tr></thead><tbody>
+<tr>
+<td><code>database.dump</code></td>
+<td><code>pg_dump --format=custom</code>，在数据库容器里执行</td>
+</tr>
+<tr>
+<td><code>uploads.tar.gz</code></td>
+<td><code>fmkj-v3-uploads</code> 数据卷</td>
+</tr>
+<tr>
+<td><code>metadata.json</code></td>
+<td>时间、标签、镜像版本、步骤结果</td>
+</tr>
+</tbody></table></div>
+<p>同时在 <code>deploy-state/backup-state.json</code> 记一条给管理页面看的摘要（时间、标签、保留份数、成败）， 失败也会记一条再去报错。</p>
+<p><strong>恢复</strong>（顺序不能反）：</p>
+<pre class="code"><code>cd /opt/fmkj/app
+COMPOSE="docker compose -f docker-compose.appliance.yml"
+BACKUP=backups/appliance/&lt;目录&gt;
+
+$COMPOSE stop app
+# 1) 恢复数据库：进数据库容器用本地 socket，不需要连接串，也不依赖宿主机到容器的网络
+$COMPOSE exec -T postgres sh -c 'dropdb -U "$POSTGRES_USER" --if-exists "$POSTGRES_DB" &amp;&amp; createdb -U "$POSTGRES_USER" "$POSTGRES_DB"'
+$COMPOSE exec -T postgres pg_restore --clean --if-exists --no-owner -U "$POSTGRES_USER" -d "$POSTGRES_DB" &lt; "$BACKUP/database.dump"
+# 2) 恢复文件卷
+export FMKJ_UPLOADS_VOLUME=fmkj-v3-uploads
+docker run --rm -e FMKJ_UPLOADS_VOLUME -v "$FMKJ_UPLOADS_VOLUME:/data" -v "$PWD/$BACKUP:/backup" \
+  alpine sh -c 'rm -rf /data/* &amp;&amp; tar xzf /backup/uploads.tar.gz -C /data'
+# 3) 用与被恢复结构匹配的镜像启动
+FMKJ_IMAGE=&lt;metadata.json 里的 image&gt; $COMPOSE up -d
+curl -fsS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000/login</code></pre>
+<blockquote>恢复前先确认 <code>metadata.json</code> 里的版本，并用同版本镜像启动；跨版本恢复要重新跑迁移。 旧文档里的 <code>docker run ... pg_restore -d "$PGURL"</code> 在 Linux 上连不上容器里的库 （默认 bridge 解析不到宿主机与 compose 服务名），已改为上面的容器内执行。</blockquote>
+<h3 id="51-客户自己在网页上备份与恢复应用内">5.1 客户自己在网页上备份与恢复（应用内）<a class="anchor" href="#51-客户自己在网页上备份与恢复应用内" aria-label="链接到此节">#</a></h3>
+<p>设备交付给客户后，客户不该为了备份来找你。管理后台「管理员 → 系统 → 系统健康 → 备份与恢复」提供两件事：</p>
+<div class="table-wrap"><table><thead><tr>
+<th>动作</th>
+<th>行为</th>
+</tr></thead><tbody>
+<tr>
+<td>导出备份</td>
+<td>点一下就下载 <code>fmkj-backup-&lt;时间&gt;.tar.gz</code>：<strong>整库所有业务表 + 上传统附件</strong>，流式下载不进内存</td>
+</tr>
+<tr>
+<td>从备份恢复</td>
+<td>选择备份包 → 手工输入「恢复」两个字 → 上传。恢复前先整体校验，再在一个事务里替换</td>
+</tr>
+</tbody></table></div>
+<p>包的结构（客户自己也能打开看，是个普通 tar.gz）：</p>
+<pre class="code"><code>manifest.json           格式版本、导出时间、软件版本、结构指纹、每张表的行数与内容摘要、附件数量
+database/&lt;表名&gt;.csv      PostgreSQL COPY 出来的 CSV，带表头
+uploads/&lt;原路径&gt;         上传统附件原样打包</code></pre>
+<p>恢复的守卫，任一条不过就<strong>整体回滚、本机数据一点不动</strong>：</p>
+<ul>
+<li>文件不是本系统导出的、manifest 读不出来、格式版本不一致；</li>
+<li><strong>结构指纹对不上</strong>（备份来自另一版软件）→ 提示先升级到同一版本；</li>
+<li>任一张表的内容摘要与清单不符（传输损坏或被改过）；</li>
+<li>恢复过程中任何一步失败 → 事务回滚，并留下可读的失败原因。</li>
+</ul>
+<p>其它要知道的：</p>
+<ul>
+<li>恢复会<strong>整体替换</strong>本机所有业务数据；备份里没有的、本机新产生的修改会丢。这是「灾难恢复」按钮，不是「合并」按钮。</li>
+<li>附件按「只增不删」写回：宁可留下没人引用的文件，也不删可能还被引用的文件。</li>
+<li>上限 512MB；更大的备份请走上面的宿主机脚本（<code>backup-local.mjs</code> / <code>pg_restore</code>），那条路不吃应用内存。</li>
+<li><strong>应用起不来的时候，网页也打不开</strong>，所以恢复不能只靠这一条路：宿主机上的 <code>pg_restore</code> 步骤（第 5 节）才是兜底。</li>
+<li>恢复上传的路径特意<strong>不进中间件</strong>：中间件会按 <code>proxyClientMaxBodySize</code>（32MB）复制请求体，超过就变成坏包。</li>
+<p>该路由自己用 <code>requireSuperAdmin()</code> 校验权限，且先校验再读请求体，未登录请求不会被读进内存。</p>
+</ul>
+<h3 id="52-发货前自检一条命令">5.2 发货前自检（一条命令）<a class="anchor" href="#52-发货前自检一条命令" aria-label="链接到此节">#</a></h3>
+<pre class="code"><code>cd /opt/fmkj/app
+/opt/fmkj/tools/node/bin/node scripts/deploy/smoke-appliance.mjs \
+  --base http://127.0.0.1:3000 --email &lt;管理员邮箱&gt; --password '&lt;口令&gt;'</code></pre>
+<p>只做<strong>只读</strong>检查，不会改数据、不会触发同步、不会恢复备份：登录页、管理员登录、系统健康页、 产品库可读、同步状态、备份能导出（只统计大小并核对是不是有效 gzip，包不落地）、未登录必须被拦。 全过退出码为 0；有失败会逐条打印原因并退出 1——<strong>先别发货</strong>。</p>
+<p>也可以传 <code>--cookie "session=..."</code> 跳过密码登录（例如你不想在命令行里出现口令时）。 如果登录那一步显示 429，说明刚有人试错密码、限流还没过，等 15 分钟或换一个管理员账号。</p>
+<h3 id="53-把产品库搬到设备上可选">5.3 把产品库搬到设备上（可选）<a class="anchor" href="#53-把产品库搬到设备上可选" aria-label="链接到此节">#</a></h3>
+<p>设备默认不带产品资料。日常有两条更省事的路（都在后台里，不用碰命令行）：</p>
+<ul>
+<li><strong>产品管理 → 批量导入</strong>：下载 CSV 模板填好上传，先预演差异、确认后入库；空单元格表示「这一项不改」。</li>
+<li><strong>产品管理 → 从服务器同步</strong>：配好 <code>UPSTREAM_*</code> 后从你的服务器拉目录，默认只补新品、不覆盖本地改过的价格。</li>
+</ul>
+<p>下面这条命令行做法仍然有效，适合<strong>一次性搬大量历史数据</strong>或需要在网页之外完成时使用。要把你现有产品库放上去，只搬<strong>产品库相关的四张表</strong>就够了：</p>
+<pre class="code"><code># 1) 在源库侧导出（示例为开发机上的 fmkj-v3-db 容器）
+docker exec fmkj-v3-db pg_dump -U postgres -d fmkj --data-only --no-owner --no-privileges \
+  --format=custom \
+  --table=products --table=product_visual_assets \
+  --table=category_default_products --table=device_types \
+  -f /tmp/product-library.dump
+docker cp fmkj-v3-db:/tmp/product-library.dump .
+
+# 2) 传到设备后导入（products 的自引用外键是环状，必须 --disable-triggers）
+scp product-library.dump &lt;设备&gt;:/opt/fmkj/product-library.dump
+cd /opt/fmkj/app
+docker compose -f docker-compose.appliance.yml exec -T postgres \
+  pg_restore --data-only --disable-triggers --no-owner -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  &lt; /opt/fmkj/product-library.dump
+
+# 3) 核对（数量应与源库一致）
+docker compose -f docker-compose.appliance.yml exec -T postgres \
+  psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "select count(*) from products"</code></pre>
+<p>要点：</p>
+<ul>
+<li><strong>商品图不用搬</strong>：<code>products.image</code> 与 <code>product_visual_assets.image</code> 存的是 <code>/assets/products/...</code> 路径，</li>
+<p>这些文件在应用镜像里（<code>public/assets/products/</code>），随镜像版本走。</p>
+<li><strong>不搬项目/报价相关的东西</strong>：<code>project_product_prices</code>（项目级价格）、<code>quote_items</code>（报价行）、</li>
+<p><code>project_category_default_products</code>（项目类别默认）属于具体项目与报价，跟项目一起搬，不跟产品库搬。</p>
+<li>导入前后各做一次备份（第 5 节），出问题可以直接回到导入前。</li>
+<li><code>--data-only</code> 是<strong>追加</strong>：目标表必须是空的；重复导入会产生重复 SKU，先查 <code>select count(*)</code>。</li>
+<li>产品原有的审核状态、选型/价格核验依据与 <code>mapping_revision</code> 原样保留，不会被"搬家"改成已核验。</li>
+<li><code>created_by</code> / <code>submitted_by</code> / <code>reviewed_by</code> 存的是源库的用户 id；设备上没有这些账号时它们只是</li>
+<p>悬空引用（没有外键约束，不影响导入），界面上"谁提交的"会显示不出来。要完整保留就把 <code>users</code> 一起搬，或接受设备上用本机账号重新记录。</p>
+<li>产品库<strong>不走上游接口</strong>（ADR 0010）。两边各自演进后"以哪边为准"必须由使用者明确：设备是运行实例，</li>
+<p>源库是维护库；建议只在源库维护、需要时用本节重新导出导入，不要在两边同时改同一批型号。</p>
+</ul>
+<h3 id="54-把某个项目搬到设备上可选">5.4 把某个项目搬到设备上（可选）<a class="anchor" href="#54-把某个项目搬到设备上可选" aria-label="链接到此节">#</a></h3>
+<p>业务数据（项目、点位、报价、交付）<strong>只能靠这条路</strong>搬——ADR 0010 不允许它们走上游接口。 整库恢复会把所有项目一起带过去，所以按项目定向导出：</p>
+<pre class="code"><code># 1) 在源库所在机器上导出（脚本会先列出项目，再按名称/ id 导出相关表）
+node scripts/deploy/export-project-slice.mjs --list
+node scripts/deploy/export-project-slice.mjs --project "示例项目 · 智能家居设计草稿" --out /tmp/bangtai.sql
+
+# 2) 传到设备后装载（脚本已带事务与 session_replication_role=replica）
+scp /tmp/bangtai.sql &lt;设备&gt;:/opt/fmkj/bangtai.sql
+ssh &lt;设备&gt; 'cd /opt/fmkj/app \
+  &amp;&amp; docker cp /opt/fmkj/bangtai.sql fmkj-v3-db:/tmp/ \
+  &amp;&amp; docker compose -f docker-compose.appliance.yml exec -T postgres \
+     psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -f /tmp/bangtai.sql'</code></pre>
+<p>要点：</p>
+<ul>
+<li>导出的表：<code>projects</code>、<code>project_point_map_designs</code>、<code>project_point_map_versions</code>、<code>project_deliveries</code>、</li>
+<p><code>project_members</code>、<code>project_attachments</code>、<code>project_site_photos</code>、<code>project_product_prices</code>、 <code>project_category_default_products</code>、<code>quotes</code> + <code>quote_items</code>、<code>work_orders</code> 及其三张子表、 <code>activity_logs</code>，以及项目 owner 的那条 <code>users</code> 记录。</p>
+<li><strong>不含全局资料</strong>：<code>products</code>、<code>device_types</code>、<code>category_default_products</code> 属于产品库，用 4.1 单独搬。</li>
+<p>所以先搬产品库、再搬项目，否则项目的商品引用会指空。</p>
+<li>目标库必须<strong>没有同一个项目</strong>：装载是插入而不是覆盖，同 id 会主键冲突。</li>
+<li>项目里的点位底图、交付快照可能是几十 MB 的文本字段（实测一个项目 83 MB，其中交付快照 78 MB），</li>
+<p>导出/装载会走网络，别在窄带宽下同时跑别的大传输。</p>
+<li>装载用 <code>session_replication_role = replica</code> 临时关掉外键触发器（<code>projects</code>、<code>products</code> 有自引用/</li>
+<p>环状约束）；约束只是延迟检查，装载完仍然是完整的。</p>
+<li>装载前后各做一次备份（第 5 节）。核对方式：项目数、草稿 <code>revision</code> 与点位数、交付版本数、报价行数、</li>
+<p>项目级价格数，在源库与设备各查一遍。</p>
+</ul>
+<h2 id="6-让客户在外网访问内网穿透-反向代理-vpn">6. 让客户在外网访问（内网穿透 / 反向代理 / VPN）<a class="anchor" href="#6-让客户在外网访问内网穿透-反向代理-vpn" aria-label="链接到此节">#</a></h2>
+<p>设备默认只在局域网里：<code>http://&lt;设备IP&gt;:3000</code>。客户想在外面用，有三条路，按安全性从高到低：</p>
+<div class="table-wrap"><table><thead><tr>
+<th>方式</th>
+<th>客户拿到什么</th>
+<th>门槛</th>
+<th>适合</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>VPN / Tailscale</strong></td>
+<td>不对外开网址，手机和电脑装上客户端就能进内网</td>
+<td>每个使用者装一次客户端</td>
+<td><strong>最安全</strong>，也最省心（不暴露公网、不用管证书）</td>
+</tr>
+<tr>
+<td><strong>反向代理 + 内网穿透</strong>（frp 自建、Cloudflare Tunnel、商用穿透）</td>
+<td>一个 https 网址</td>
+<td>自建要一台小服务器与域名；Cloudflare 要域名 + 账号</td>
+<td>客户要「发个网址就能看」</td>
+</tr>
+<tr>
+<td><strong>公网 IP + 端口转发</strong></td>
+<td>一个 https 网址</td>
+<td>要有公网 IP，且证书、防护都得自己管</td>
+<td>不推荐：家宽大多没有公网 IP，暴露面也大</td>
+</tr>
+</tbody></table></div>
+<h3 id="61-暴露到公网之前必须做到的几件事">6.1 暴露到公网之前，必须做到的几件事<a class="anchor" href="#61-暴露到公网之前必须做到的几件事" aria-label="链接到此节">#</a></h3>
+<ol>
+<li><strong>必须是 HTTPS</strong>。密码走 http 等于明文广播。设备本身不终止 TLS，交给隧道/反代那一层。</li>
+<li><strong>关掉自助注册</strong>。设备版编排默认已经关（<code>FMKJ_ALLOW_SELF_SIGNUP=false</code>）；</li>
+<p>托管版不要跟着关，那是拉新客用的。</p>
+<li><strong>先把管理员设好</strong>。设备还没初始化就暴露出去，等于把「设置管理员」让给第一个打开的人。</li>
+<li><strong>反代的 Cookie 标志交给应用判断</strong>：反代带上 <code>x-forwarded-proto: https</code>（应用据此给会话</li>
+<p>Cookie 加 <code>Secure</code>），或者显式 <code>AUTH_COOKIE_SECURE=true</code>。搞反了会出现「登录提示成功， 但一直是未登录状态」。</p>
+<li><strong>管理员密码要强</strong>，别用 12345678。设备已有登录失败限流（同一账号 15 分钟 8 次）。</li>
+</ol>
+<h3 id="62-帮客户开通前后各跑一次自检">6.2 帮客户开通前后，各跑一次自检<a class="anchor" href="#62-帮客户开通前后各跑一次自检" aria-label="链接到此节">#</a></h3>
+<pre class="code"><code>node scripts/deploy/check-public-access.mjs --url https://客户的网址
+# 能拿到管理员账号时，顺带检查会话 Cookie 是否带 Secure/HttpOnly：
+node scripts/deploy/check-public-access.mjs --url https://客户的网址 \
+  --email you@example.com --password '管理员密码'</code></pre>
+<p>它会只读地检查七件事：是否 HTTPS、登录页通不通、<strong>自助注册页是否已关</strong>、<strong>注册接口是否拒绝</strong>、 管理接口是否要求登录、官方资料接口是否裸奔、<strong>设备是否已经设了管理员</strong>。有必须处理的项没过会 以非 0 退出——那种情况下先别把网址交给客户。</p>
+<h3 id="63-用你的服务器-frp每加一个客户只需一条命令">6.3 用你的服务器 + frp：每加一个客户只需一条命令<a class="anchor" href="#63-用你的服务器-frp每加一个客户只需一条命令" aria-label="链接到此节">#</a></h3>
+<p><strong>服务器端只配一次，之后加客户不用再碰服务器。</strong> 模板都在 <code>deploy/public-access/server/</code>：</p>
+<div class="table-wrap"><table><thead><tr>
+<th>文件</th>
+<th>作用</th>
+</tr></thead><tbody>
+<tr>
+<td><code>frps.toml</code></td>
+<td>穿透服务端（一条 <code>auth.token</code>，所有客户共用，当密码保管）</td>
+</tr>
+<tr>
+<td><code>Caddyfile</code></td>
+<td>HTTPS + 压缩 + 转发给 frps；泛域名证书一张覆盖所有客户</td>
+</tr>
+<tr>
+<td><code>README-服务器一次性配置.md</code></td>
+<td>从零到能用的步骤（DNS 泛解析、证书、防火墙）</td>
+</tr>
+</tbody></table></div>
+<p><strong>每加一个客户</strong>：在客户设备上跑一条命令（装机包里带这个脚本）：</p>
+<pre class="code"><code>bash enable-public-access.sh --host dealer01.你的域名.com \
+  --server 你的服务器IP:17000 --token 'frps 里那串 token' --check</code></pre>
+<p>它会装好 frpc、写配置（客户专属子域名 + 每客户限速 2MB/s）、开机自启、等连上、跑一遍自检， 最后打印给客户的网址。关掉：<code>--disable</code>。</p>
+<p><strong>真机实测过整条链路</strong>（设备 → 你的服务器 → HTTPS 网址）：</p>
+<div class="table-wrap"><table><thead><tr>
+<th>检查</th>
+<th>结果</th>
+</tr></thead><tbody>
+<tr>
+<td>通过 HTTPS 网址打开设备</td>
+<td>HTTP/2 200，HSTS 生效</td>
+</tr>
+<tr>
+<td>产品库一次加载</td>
+<td>1.2MB → <strong>122KB</strong>（Caddy gzip 压缩）</td>
+</tr>
+<tr>
+<td>通过公网网址跑自检</td>
+<td><strong>7/7 通过</strong>（HTTPS、注册已关、管理接口 401、资料接口 404…）</td>
+</tr>
+</tbody></table></div>
+<blockquote>注意：frp 开源版的 token 是全局的，不是每个客户一个。设备退役或怀疑泄露时换掉即可。 要真正做到一人一密，只能按客户分 frps 实例。</blockquote>
+<h3 id="64-手工配置参考不用脚本时">6.4 手工配置参考（不用脚本时）<a class="anchor" href="#64-手工配置参考不用脚本时" aria-label="链接到此节">#</a></h3>
+<p>设备侧（客户机器上，<code>frpc.toml</code>）：</p>
+<pre class="code"><code>serverAddr = "你的服务器IP"
+serverPort = 7000
+auth.token = "一串随机长字符串"
+
+[[proxies]]
+name = "fmkj-app"
+type = "http"
+localIP = "127.0.0.1"
+localPort = 3000
+customDomains = ["kanban.你的域名.com"]</code></pre>
+<p>服务器侧（<code>frps.toml</code>）：开 7000 给 frpc、80/443 走域名；TLS 证书用 Caddy/Nginx 或 frp 的 <code>https</code> 段。 <strong>把网址绑到域名、证书挂在反代上</strong>，不要让客户直接记 IP 和端口。</p>
+<blockquote>走这条路的客户，设备上的 <code>FMKJ_BIND</code> 保持默认（<code>0.0.0.0</code>）即可：穿透客户端在设备本机连 <code>127.0.0.1:3000</code>，局域网访问和外部访问互不影响。</blockquote>
+<h2 id="7-登录与上传的守卫2026-10-22-加固">7. 登录与上传的守卫（2026-10-22 加固）<a class="anchor" href="#7-登录与上传的守卫2026-10-22-加固" aria-label="链接到此节">#</a></h2>
+<div class="table-wrap"><table><thead><tr>
+<th>位置</th>
+<th>原来</th>
+<th>现在</th>
+</tr></thead><tbody>
+<tr>
+<td>登录（密码 / 验证码）</td>
+<td>没有次数限制，可以无限试</td>
+<td>同一账号 15 分钟最多失败 8 次、同一来源最多 40 次；超了返回 429 并告诉要等多久；登录成功即清零</td>
+</tr>
+<tr>
+<td>发验证码</td>
+<td>没有次数限制（接了真实短信后就是烧钱）</td>
+<td>同一目标 1 小时最多 5 条，超了 429</td>
+</tr>
+<tr>
+<td>文件上传</td>
+<td>只问「你登录了吗」，目录名由表单决定</td>
+<td>按类型判归属：头像只能给自己、公司标志只能给自己的组织、商品图要超管且商品存在、合同/户型图/报价单必须是能编辑的项目；认不出的类型直接拒绝</td>
+</tr>
+</tbody></table></div>
+<p>没有反向代理、拿不到真实来源时，只做「按账号」的限制，不做全局来源封禁——避免一个人把全公司锁在门外。</p>
+<h2 id="8-对接运营方服务接口收费部分">8. 对接运营方服务（接口收费部分）<a class="anchor" href="#8-对接运营方服务接口收费部分" aria-label="链接到此节">#</a></h2>
+<p>本地设备版在<strong>离线时核心工作流必须完整可用</strong>（ADR 0010）。所以对接只覆盖「获取新东西」，不参与日常编辑。</p>
+<div class="table-wrap"><table><thead><tr>
+<th>用途</th>
+<th>方向</th>
+<th>失败时的行为</th>
+</tr></thead><tbody>
+<tr>
+<td>版本清单 / 镜像信息</td>
+<td>设备 → 运营方</td>
+<td>保持当前版本，仅提示</td>
+</tr>
+<tr>
+<td>实例注册</td>
+<td>设备 → 运营方</td>
+<td>本地功能不受影响</td>
+</tr>
+<tr>
+<td>授权与订阅校验</td>
+<td>设备 → 运营方</td>
+<td>用缓存授权 + 离线宽限期</td>
+</tr>
+<tr>
+<td>官方产品资料增量</td>
+<td>设备 ← 运营方</td>
+<td>保留本地资料，游标不前进</td>
+</tr>
+<tr>
+<td>资料包与素材下载</td>
+<td>设备 ← 运营方</td>
+<td>本次同步失败，可重试续传</td>
+</tr>
+<tr>
+<td>诊断上报（默认关闭）</td>
+<td>设备 → 运营方</td>
+<td>忽略</td>
+</tr>
+</tbody></table></div>
+<p><strong>只发送</strong>：实例标识、订阅范围、同步游标、软件版本、资料版本与摘要。 <strong>绝不发送</strong>（ADR 0010）：客户名称、项目、点位、图纸、报价、交付、上传附件、用户自建产品与成本。</p>
+<h3 id="81-建议的最小接口形状提案尚未实现">8.1 建议的最小接口形状（提案，尚未实现）<a class="anchor" href="#81-建议的最小接口形状提案尚未实现" aria-label="链接到此节">#</a></h3>
+<p>让设备只需要认一套很小的约定；具体字段名可在实现时调整，语义不要改。</p>
+<pre class="code"><code>Authorization: Bearer &lt;LICENSE_KEY&gt;      # 订阅凭据
+X-Instance-Id: &lt;INSTANCE_ID&gt;             # 设备/实例标识，不含客户信息
+
+POST /v1/instances                       注册与心跳
+  → { softwareVersion, deploymentKind: "local-appliance" }
+  ← { authorized, catalog: { enabled, expiresAt }, serverTime }
+
+GET  /v1/releases?channel=stable         版本清单（更新脚本用它确定目标版本）
+  ← { releases: [ { version, image, digest, minSchema, requiresMigration, notes } ] }
+
+POST /v1/catalog/changes                 官方资料增量
+  → { cursor, catalogRevision }
+  ← { catalogRevision, changes: [ { upstreamId, upstreamRevision, payload, assets[] } ],
+      nextCursor, done }
+
+GET  /v1/catalog/assets/{assetId}        素材下载；响应头带 sha256 与 size 供校验
+POST /v1/diagnostics                     可选诊断上报（默认关闭，须显式开启）</code></pre>
+<p>游标语义：<code>done=false</code> 时用 <code>nextCursor</code> 继续；<strong>全部批次应用成功后才提交游标</strong>， 中途失败重试同一游标，不会重复建产品。</p>
+<p>合同要求（不可放宽）：</p>
+<ul>
+<li>资料包必须<strong>验签 + 校验摘要与大小</strong>后才能应用（<code>UPSTREAM_PUBLIC_KEY</code>）。</li>
+<li><strong>幂等</strong>：按批次 + 游标应用，重复执行不重复建产品，失败从已提交位置恢复。</li>
+<li>上游修订<strong>不能冒充</strong>本地 <code>mappingRevision</code>；既有并发控制与产品核验规则继续生效。</li>
+<li>授权到期<strong>只影响获取新增资料</strong>，不锁本地业务写入、不删除已同步资料。</li>
+<li>任何上游调用失败都必须降级为「本地继续可用」，不能阻塞登录、编辑、保存与导出。</li>
+</ul>
+<p>配置项：</p>
+<pre class="code"><code>UPSTREAM_ENABLED=false
+UPSTREAM_BASE_URL=https://api.example.com
+INSTANCE_ID=
+LICENSE_KEY=
+UPSTREAM_PUBLIC_KEY=</code></pre>
+<h3 id="82-当前实现到哪一步2026-10-22">8.2 当前实现到哪一步（2026-10-22）<a class="anchor" href="#82-当前实现到哪一步2026-10-22" aria-label="链接到此节">#</a></h3>
+<p>已实现「官方产品资料同步」的第一版，走的是<strong>快照</strong>而不是增量游标：</p>
+<div class="table-wrap"><table><thead><tr>
+<th>项</th>
+<th>现状</th>
+</tr></thead><tbody>
+<tr>
+<td>传输</td>
+<td><code>GET {UPSTREAM_BASE_URL}/api/catalog/snapshot</code>，<code>Authorization: Bearer &lt;LICENSE_KEY&gt;</code> + <code>X-Instance-Id</code>；响应是一份 CSV（列与批量导入模板完全相同），带 <code>X-Catalog-Revision</code> 与 <code>X-Catalog-Sha256</code></td>
+</tr>
+<tr>
+<td>完整性</td>
+<td>有摘要头时按内容校验，对不上就整批拒绝（能发现传输截断或改动）</td>
+</tr>
+<tr>
+<td><strong>验签</strong></td>
+<td>发布端配 <code>CATALOG_SIGNING_KEY</code>（Ed25519 私钥）后，响应带 <code>X-Catalog-Signature</code>；设备配 <code>UPSTREAM_PUBLIC_KEY</code> 后<strong>只接受签过名的目录</strong>，签名不对或没有签名一律拒收。摘要只证明「没被改坏」，签名才证明「是谁发的」</td>
+</tr>
+<tr>
+<td><strong>图片</strong></td>
+<td>同步时把资料里的 <code>/assets/...</code> 产品图一起取回，存进设备自己的上传卷，产品记录改成本地 <code>/api/files/product-images/...</code>。每次最多 200 张，其余下次同步继续；单张失败只记一行，不拖垮整批</td>
+</tr>
+<tr>
+<td>幂等</td>
+<td>按系统货号认人：没有的建新的，已有的按策略处理；原样重复同步不会重复建产品</td>
+</tr>
+<tr>
+<td>默认安全</td>
+<td><strong>默认只补新品，不覆盖本地已有的货号</strong>；管理员在「从服务器同步」里显式勾选才允许覆盖已有产品（否则本地调过的价格会被官方资料悄悄改掉）</td>
+</tr>
+<tr>
+<td>失败降级</td>
+<td>连不上、凭据失效、摘要不符：本地资料一字不动，只记一条失败记录，页面能看到原因</td>
+</tr>
+<tr>
+<td>记录</td>
+<td>每次应用写一条 <code>catalog_sync_runs</code>（资料版本、新增/更新/跳过/失败计数、失败原因），管理员页面显示上次结果</td>
+</tr>
+<tr>
+<td>定时同步</td>
+<td>配好上面三项后，应用启动时自动排期：默认启动 5 分钟后跑一次、之后每 24 小时一次。只补新品，不覆盖本地。用 <code>UPSTREAM_SYNC_ENABLED=false</code> 关掉（只留页面上手动点），<code>UPSTREAM_SYNC_INTERVAL_HOURS</code> 改频率</td>
+</tr>
+<tr>
+<td>发布端</td>
+<td><code>GET /api/catalog/snapshot</code>，用 <code>CATALOG_PUBLISH_TOKEN</code> 当 Bearer 校验；只发布目录里已通过审核的产品；没配 token 时该接口按 404 关闭</td>
+</tr>
+</tbody></table></div>
+<p>定时同步跑在应用进程里（Next 的 instrumentation 钩子），所以<strong>设备上不需要额外装定时任务、也不需要给接口开第二个凭据</strong>。 没有具体操作人时审计如实记成空（不编造一个假用户去顶）。进程重启会重新计时；多实例部署时会各自跑一遍， 设备版是单实例所以没这个问题——托管版要接这个功能得先想清楚去重。</p>
+<p><strong>已经补上的</strong>（2026-10-22）：</p>
+<ul>
+<li>~~验签~~：已实现 Ed25519 验签（发布端私钥、设备端公钥）；没签名或签名不对整批拒收。</li>
+<li>~~素材下载~~：已实现——同步时把产品图取回本地（每次上限 200 张，其余下次继续）。</li>
+<li>~~定时自动同步~~：已实现（应用进程内排期，见上表）。</li>
+</ul>
+<p><strong>尚未实现</strong>（对照上面的合同，别把它当成已经满足）：</p>
+<ul>
+<li><strong>增量游标与批次</strong>：一次拉全量快照，没有 <code>cursor / nextCursor / done</code> 的分批。当前目录约 800 条、快照约 200KB，</li>
+<p>没有分批的必要；目录涨到几千条或素材变多时再补，补之前先定「批次失败如何续」。</p>
+<li><strong>本地覆盖与逐项冲突</strong>：没有「用户改过的字段 vs 上游更新」的三方比对与逐项接受；目前只有「整条不覆盖」这个粗粒度开关。</li>
+<li><strong>授权与订阅校验</strong>：没有实例注册、订阅到期与宽限期；凭据错了就是整批 401。</li>
+</ul>
+<h2 id="9-排障">9. 排障<a class="anchor" href="#9-排障" aria-label="链接到此节">#</a></h2>
+<div class="table-wrap"><table><thead><tr>
+<th>现象</th>
+<th>先看这里</th>
+</tr></thead><tbody>
+<tr>
+<td>更新后页面 502 / 打不开</td>
+<td><code>deploy:status</code>；<code>docker compose -f docker-compose.appliance.yml logs app</code>；<code>/login</code> 不是 200 说明应用没起来</td>
+</tr>
+<tr>
+<td>登录提示成功，但还是未登录</td>
+<td><code>AUTH_COOKIE_SECURE</code>：http 访问时必须为 <code>auto</code> 或 <code>false</code>（浏览器不保存带 Secure 的 Cookie）</td>
+</tr>
+<tr>
+<td><code>node: command not found</code></td>
+<td>宿主机没装 Node；用 <code>/opt/fmkj/tools/node/bin/node</code>（见第 2 节）</td>
+</tr>
+<tr>
+<td><code>docker pull</code> 超时 / <code>000</code></td>
+<td>设备不通 Docker Hub；改用自建仓库或 <code>docker load</code> 离线导入</td>
+</tr>
+<tr>
+<td><code>x509: certificate signed by unknown authority</code></td>
+<td>自建仓库用了自签证书：把 CA 放到 <code>/etc/docker/certs.d/&lt;host&gt;:&lt;port&gt;/ca.crt</code>（不需要重启 docker）</td>
+</tr>
+<tr>
+<td>更新失败提示 <code>stop-for-restore</code></td>
+<td>不要切回旧镜像，按第 5 节恢复备份</td>
+</tr>
+<tr>
+<td><code>已有更新在执行中</code></td>
+<td>确认没有脚本在跑，再删 <code>deploy-state/update.lock</code></td>
+</tr>
+<tr>
+<td>verify 报「容器报告版本 X，期望 Y」</td>
+<td>说明 <code>up -d</code> 用的还是旧镜像，检查 <code>.env</code> 的 <code>FMKJ_IMAGE</code> 是否被写回</td>
+</tr>
+<tr>
+<td>备份报 <code>could not translate host name</code></td>
+<td>数据库不在本编排里却用了 <code>docker run</code> 探针；指定 <code>--database-service</code>，或让脚本走 <code>docker compose exec</code></td>
+</tr>
+<tr>
+<td>上传报 <code>EACCES: permission denied, mkdir '/data/uploads/...'</code></td>
+<td>数据卷归属不对：编排里的 <code>uploads-init</code> 会自动修正（2026-10-21 真机补），确认它跑过（<code>docker compose ps -a</code> 里状态为 Exited (0)）；手工修正：<code>docker run --rm -v fmkj-v3-uploads:/data/uploads alpine chown -R 1001:1001 /data/uploads</code></td>
+</tr>
+<tr>
+<td>上传功能报 <code>BLOB_STORE_NOT_CONFIGURED</code></td>
+<td>只在 <code>FILE_STORAGE=blob</code> 且没配 token 时出现；本地设备版应为 <code>local</code></td>
+</tr>
+<tr>
+<td>附件打不开 / 404</td>
+<td>附件由 <code>/api/files/...</code> 按项目可见性鉴权；确认登录账号对该项目可见，且 <code>fmkj-v3-uploads</code> 卷已挂载</td>
+</tr>
+<tr>
+<td>磁盘涨得快</td>
+<td><code>deploy:backup --keep N</code> 调整保留份数；上传附件在 <code>fmkj-v3-uploads</code> 卷里</td>
+</tr>
+</tbody></table></div>
+
+    <hr />
+    <h2 id="appendix-plan">附录：执行记录现状速览（plans/033）</h2>
+<h2 id="现状速览2026-10-22-收尾">现状速览（2026-10-22 收尾）<a class="anchor" href="#现状速览2026-10-22-收尾" aria-label="链接到此节">#</a></h2>
+<p><strong>已经能交付给客户用了</strong>（都在真机 10.0.0.134 / 与出货同型号上跑过）：</p>
+<div class="table-wrap"><table><thead><tr>
+<th>能力</th>
+<th>版本</th>
+<th>真机验证</th>
+</tr></thead><tbody>
+<tr>
+<td>一条命令装机（含首次初始化页：客户自己设管理员）</td>
+<td>v0.3.5+</td>
+<td>✅ 从零装一套，自检 3/3，客户首次体验全通</td>
+</tr>
+<tr>
+<td>母盘批量出货（清数据、每台独立密钥、首次开机自初始化）</td>
+<td>v0.3.6+</td>
+<td>✅ 上一个客户的账号/产品/附件都不带走；重复开机空转</td>
+</tr>
+<tr>
+<td>页面点按钮在线更新（检查 + 立即更新，进度与失败原因可见）</td>
+<td>v0.3.0+</td>
+<td>✅ v0.1.4 → v0.3.8 连续多次，全程点按钮</td>
+</tr>
+<tr>
+<td>客户自助备份导出 / 还原</td>
+<td>v0.2.0+</td>
+<td>✅ 42MB 备份下载与还原</td>
+</tr>
+<tr>
+<td>报价单/方案的客户品牌（公司名、logo、联系方式、地址、二维码）</td>
+<td>v0.3.8</td>
+<td>✅ 真实报价单渲染确认</td>
+</tr>
+<tr>
+<td>发货前自检脚本</td>
+<td>v0.2.0+</td>
+<td>✅ 每次装机与更新后都跑</td>
+</tr>
+</tbody></table></div>
+<p><strong>当前版本线</strong>：镜像仓库 <code>10.0.0.235:5443/fmkj-v3</code> 上 v0.1.x（旧）→ v0.2.0 → v0.3.0…v0.3.8。 设备 10.0.0.134 现在跑 v0.3.8。装机包与操作卡都按 v0.3.8 重新生成过（<code>dist/</code>、<code>docs/设备更新操作卡.pdf</code>）。</p>
+<p><strong>真机上暴露并修掉的问题</strong>（本地测试测不出来，都是实跑才出现的）： 装机 uid 1001 写不进 root 目录（EACCES）；compose 会「继承」机器上已有容器的项目名，导致测试实例 误动正式容器；<code>.env</code> 重复键让更新静默退回旧版本；升级时提交请求的是旧版本应用（要兼容老路径）； 自签仓库的 CA 要给 Node；报价页被预渲染缓存导致品牌不生效；更新只换镜像不同步宿主机脚本。 每条都在提交信息与本文对应小节里写明。</p>
+<p><strong>还没做</strong>（别当成已满足）： 真机上的<strong>失败路径复测</strong>（断电、拉取失败、迁移后失败）只有单测覆盖，没在设备上真复现过； <strong>真实打印</strong>（打印机 / 导出 PDF 的边距分页）没验过，只在屏幕上渲染确认； 托管版运维、多实例、换机搬迁、AI 自动布点与自动报价仍为规划； 报价单上的客户联系人/电话尚未支持（只有客户项目名）。</p>
+  </main>
+</div>
+</body>
+</html>

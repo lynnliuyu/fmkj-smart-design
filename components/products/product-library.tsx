@@ -1,11 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { isSvgImage } from "@/lib/image-src";
+import { needsDirectImageLoad } from "@/lib/image-src";
 import * as React from "react";
 import {
   Check,
-  CircleDollarSign,
   Copy,
   FileSpreadsheet,
   Grid2X2,
@@ -22,18 +21,15 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { StatStrip } from "@/components/business/summary-tile";
 import { ManagementBar } from "@/components/animate-ui/management-bar";
-import { ProductPointBadge, ProductPointFilters } from "@/components/products/product-point-filters";
+import {
+  pointFilterLabel,
+  ProductPointBadge,
+  ProductPointFilters,
+} from "@/components/products/product-point-filters";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -144,12 +140,7 @@ export function ProductLibrary({
   const platforms = unique(catalogProducts.map((product) => product.platform));
   const brands = unique(catalogProducts.map((product) => product.brand));
   const categories = unique(catalogProducts.map((product) => product.category));
-  const summary = {
-    products: catalogProducts.length,
-    brands: brands.length,
-    platforms: platforms.length,
-    categories: categories.length,
-  };
+  const totalProducts = catalogProducts.length;
 
   React.useEffect(() => {
     let active = true;
@@ -358,126 +349,156 @@ export function ProductLibrary({
     setSelectedProductKeys(new Set());
   };
 
+  const hasActiveFilters =
+    Boolean(facet) || pointFilter.category !== "all" || pointFilter.iconId !== "all";
+  const activeFilterCount =
+    (facet ? 1 : 0) +
+    (pointFilter.category !== "all" ? 1 : 0) +
+    (pointFilter.iconId !== "all" ? 1 : 0);
+  const clearFilters = () => {
+    setFacet(null);
+    setPointFilter(ALL_POINT_PRODUCTS);
+    setQuery("");
+    setSearchTerm("");
+  };
+
   return (
     <section className="flex flex-col gap-5">
-      <StatStrip
-        items={[
-          { label: "产品", value: summary.products },
-          { label: "品牌", value: summary.brands },
-          { label: "平台", value: summary.platforms },
-          { label: "分类", value: summary.categories },
-        ]}
-      />
+      <header className="space-y-1">
+        <h1 className="text-2xl font-bold tracking-tight">产品库</h1>
+        <p className="text-sm text-muted-foreground">
+          选型和报价用的产品数据。核对关键规格与核验状态后加入报价单。
+        </p>
+      </header>
 
-      <Card>
-        <CardHeader className="gap-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                <CircleDollarSign className="size-4" />
-                报价选品产品库
-              </div>
-              <CardTitle className="text-2xl">
-                按产品字段筛选和规格对比
-              </CardTitle>
-              <CardDescription>
-                可按平台、品牌、点位图类别及设备图标查找产品，再查看规格和价格。
-              </CardDescription>
-            </div>
-            <div className="relative w-full lg:max-w-sm">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  setQuery(nextValue);
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-80">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                setQuery(nextValue);
 
-                  if (!isComposingRef.current) {
-                    setSearchTerm(nextValue);
-                  }
-                }}
-                onCompositionStart={() => {
-                  isComposingRef.current = true;
-                }}
-                onCompositionEnd={(event) => {
-                  isComposingRef.current = false;
-                  setQuery(event.currentTarget.value);
-                  setSearchTerm(event.currentTarget.value);
-                }}
-                placeholder="搜索名称、SKU、品牌、标签"
-                className="h-9 pl-9"
-              />
-            </div>
+                if (!isComposingRef.current) {
+                  setSearchTerm(nextValue);
+                }
+              }}
+              onCompositionStart={() => {
+                isComposingRef.current = true;
+              }}
+              onCompositionEnd={(event) => {
+                isComposingRef.current = false;
+                setQuery(event.currentTarget.value);
+                setSearchTerm(event.currentTarget.value);
+              }}
+              placeholder="搜索名称、SKU、品牌、标签"
+              aria-label="搜索产品"
+              className="pl-9"
+            />
           </div>
-          {productSource.includes("fallback") && (
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              当前本地没有读到真实产品库连接，正在显示本地兜底产品。
-            </div>
-          )}
-          <div className="space-y-3">
-            <FacetRow
+          <Button
+            type="button"
+            variant="outline"
+            aria-expanded={showAllFilters}
+            onClick={() => setShowAllFilters((value) => !value)}
+          >
+            <SlidersHorizontal className="size-4" />
+            筛选
+            {activeFilterCount > 0 ? (
+              <span className="tabular-nums">· {activeFilterCount}</span>
+            ) : null}
+          </Button>
+          {hasActiveFilters ? (
+            <Button type="button" variant="ghost" onClick={clearFilters}>
+              <X className="size-4" />
+              清除筛选
+            </Button>
+          ) : null}
+        </div>
+
+        {showAllFilters ? (
+          <div className="flex flex-col gap-4 rounded-xl bg-muted/60 p-4">
+            <FacetGroup
               label="平台"
               type="platform"
               values={platforms}
               activeFacet={facet}
               onChange={setFacet}
             />
-            <div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="px-0"
-                aria-expanded={showAllFilters}
-                onClick={() => setShowAllFilters((value) => !value)}
-              >
-                <SlidersHorizontal className="size-4" />
-                {showAllFilters ? "收起筛选" : "更多筛选 · 品牌 / 分类 / 点位图 / 设备图标"}
-              </Button>
-            </div>
-            {showAllFilters ? (
-              <>
-                <FacetRow
-                  label="品牌"
-                  type="brand"
-                  values={brands}
-                  activeFacet={facet}
-                  onChange={setFacet}
-                />
-                <FacetRow
-                  label="分类"
-                  type="category"
-                  values={categories}
-                  activeFacet={facet}
-                  onChange={setFacet}
-                />
-                <ProductPointFilters products={catalogFilteredProducts} value={pointFilter} onChange={setPointFilter} />
-              </>
-            ) : null}
+            <FacetGroup
+              label="品牌"
+              type="brand"
+              values={brands}
+              activeFacet={facet}
+              onChange={setFacet}
+            />
+            <FacetGroup
+              label="分类"
+              type="category"
+              values={categories}
+              activeFacet={facet}
+              onChange={setFacet}
+            />
+            <ProductPointFilters
+              products={catalogFilteredProducts}
+              value={pointFilter}
+              onChange={setPointFilter}
+            />
           </div>
-        </CardHeader>
-      </Card>
+        ) : null}
+
+        {productSource.includes("fallback") && (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            当前本地没有读到真实产品库连接，正在显示本地兜底产品。
+          </div>
+        )}
+      </div>
 
       <Tabs defaultValue="cards" className="gap-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <span>
-              当前显示{" "}
-              <span className="font-medium text-foreground">
-                {filteredProducts.length}
-              </span>{" "}
-              个产品
-            </span>
-            {facet && (
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+          <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+            {!isLoadingProducts && totalProducts > 0 ? (
+              <span>
+                {filteredProducts.length === totalProducts ? (
+                  <>
+                    共{" "}
+                    <span className="font-medium tabular-nums text-foreground">
+                      {totalProducts}
+                    </span>{" "}
+                    个产品
+                  </>
+                ) : (
+                  <>
+                    筛出{" "}
+                    <span className="font-medium tabular-nums text-foreground">
+                      {filteredProducts.length}
+                    </span>{" "}
+                    / 共 {totalProducts} 个产品
+                  </>
+                )}
+              </span>
+            ) : null}
+            {facet ? (
               <Badge variant="secondary" asChild>
                 <button type="button" onClick={() => setFacet(null)}>
-                  {facet.label}: {facet.value} x
+                  {facet.label}: {facet.value}
+                  <X className="size-3" />
                 </button>
               </Badge>
-            )}
-            {(pointFilter.category !== "all" || pointFilter.iconId !== "all") && (
-              <Button type="button" variant="ghost" size="sm" onClick={() => setPointFilter(ALL_POINT_PRODUCTS)}><X className="size-3" />清除点位图筛选</Button>
-            )}
+            ) : null}
+            {pointFilter.category !== "all" || pointFilter.iconId !== "all" ? (
+              <Badge variant="secondary" asChild>
+                <button
+                  type="button"
+                  onClick={() => setPointFilter(ALL_POINT_PRODUCTS)}
+                >
+                  {pointFilterLabel(pointFilter)}
+                  <X className="size-3" />
+                </button>
+              </Badge>
+            ) : null}
           </div>
           <TabsList>
             <TabsTrigger value="cards">
@@ -550,10 +571,9 @@ export function ProductLibrary({
                     <TableHead className="w-10" />
                     <TableHead>产品</TableHead>
                     <TableHead>平台 / 分类</TableHead>
-                    <TableHead>标签</TableHead>
+                    <TableHead>核验状态</TableHead>
                     <TableHead className="text-right">售价</TableHead>
                     <TableHead className="text-right">库存</TableHead>
-                    <TableHead className="text-right">毛利</TableHead>
                     <TableHead className="text-right">操作</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -583,13 +603,10 @@ export function ProductLibrary({
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-3">
-                            <ProductImage
-                              product={product}
-                              className="size-14"
-                            />
+                            <ProductImage product={product} className="size-14" />
                             <div className="min-w-0">
                               <div className="font-medium">{product.name}</div>
-                              <div className="text-xs text-muted-foreground">
+                              <div className="mt-0.5 text-xs text-muted-foreground">
                                 {product.brand} / {product.sku}
                               </div>
                             </div>
@@ -597,12 +614,7 @@ export function ProductLibrary({
                         </TableCell>
                         <TableCell>
                           <div className="space-y-1">
-                            <Badge
-                              variant="outline"
-                              className="whitespace-normal text-left"
-                            >
-                              {product.platform}
-                            </Badge>
+                            <div>{product.platform}</div>
                             <div className="text-xs text-muted-foreground">
                               {product.category}
                             </div>
@@ -610,16 +622,15 @@ export function ProductLibrary({
                           </div>
                         </TableCell>
                         <TableCell>
-                          <TagList tags={product.tags} />
+                          <QualityBadge product={product} />
                         </TableCell>
-                        <TableCell className="text-right font-semibold">
+                        <TableCell className="text-right font-semibold tabular-nums">
                           {productPrice(product)}
                         </TableCell>
                         <TableCell className="text-right">
-                          <StockBadge product={product} />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {productMargin(product)}
+                          <div className="flex justify-end">
+                            <StockBadge product={product} />
+                          </div>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
@@ -662,7 +673,7 @@ export function ProductLibrary({
                   {!isLoadingProducts && filteredProducts.length === 0 && (
                     <TableRow>
                       <TableCell
-                        colSpan={8}
+                        colSpan={7}
                         className="h-24 text-center text-muted-foreground"
                       >
                         没有匹配的产品
@@ -714,7 +725,7 @@ export function ProductLibrary({
 }
 
 
-function FacetRow({
+function FacetGroup({
   label,
   type,
   values,
@@ -727,36 +738,29 @@ function FacetRow({
   activeFacet: Facet | null;
   onChange: (facet: Facet | null) => void;
 }) {
+  if (values.length === 0) {
+    return null;
+  }
+
+  const activeValue = activeFacet?.type === type ? activeFacet.value : "";
+
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-1 text-sm text-muted-foreground">
-        <SlidersHorizontal className="size-4" />
-        {label}
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant={
-            !activeFacet || activeFacet.type !== type ? "default" : "outline"
-          }
-          onClick={() => onChange(null)}
-        >
-          全部
-        </Button>
+      <div className="text-xs font-medium text-muted-foreground">{label}</div>
+      <div className="flex flex-wrap gap-1.5">
         {values.map((value) => {
-          const active =
-            activeFacet?.type === type && activeFacet.value === value;
+          const isActive = activeValue === value;
 
           return (
             <Button
               key={value}
               type="button"
               size="sm"
-              variant={active ? "default" : "outline"}
-              onClick={() => onChange(active ? null : { label, type, value })}
+              variant={isActive ? "default" : "outline"}
+              aria-pressed={isActive}
+              onClick={() => onChange(isActive ? null : { label, type, value })}
             >
-              {active && <Check className="size-3.5" />}
+              {isActive && <Check className="size-3.5" />}
               {value}
             </Button>
           );
@@ -799,34 +803,38 @@ function ProductCard({
         className="aspect-[4/3] w-full rounded-none border-0"
       />
       <div className="space-y-3 p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="text-sm font-semibold leading-tight">
-              {product.name}
-            </h3>
-            <p className="mt-1 break-words text-xs text-muted-foreground">
-              {product.brand} / {product.sku}
-            </p>
-          </div>
+        <div className="flex items-start justify-between gap-2">
+          <h2 className="min-w-0 text-sm font-semibold leading-snug">
+            {product.name}
+          </h2>
           <QualityBadge product={product} />
         </div>
-        <ProductPointBadge product={product} />
-        <p className="line-clamp-2 text-sm text-muted-foreground">
-          {product.description}
-        </p>
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <div className="text-lg font-bold">{productPrice(product)}</div>
-            <div className="text-xs text-muted-foreground">
-              单位：{product.unit}
-            </div>
-          </div>
+        <div className="space-y-1.5">
+          <p className="flex flex-wrap gap-x-1.5 text-xs text-muted-foreground">
+            <span>{product.brand}</span>
+            <span aria-hidden="true" className="text-muted-foreground/60">
+              /
+            </span>
+            <span className="break-all">{product.sku}</span>
+          </p>
+          <ProductPointBadge product={product} />
+        </div>
+        {hasDescription(product) ? (
+          <p className="line-clamp-2 text-sm text-muted-foreground">
+            {product.description}
+          </p>
+        ) : null}
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-lg font-bold tabular-nums">
+            {productPrice(product)}
+          </span>
           <StockBadge product={product} />
         </div>
         <div className="flex items-center gap-2">
           <Button
             type="button"
             size="sm"
+            variant="outline"
             onClick={(event) => {
               event.stopPropagation();
               onAddToQuote();
@@ -861,7 +869,6 @@ function ProductCard({
             </DropdownMenu>
           ) : null}
         </div>
-        <TagList tags={product.tags} />
       </div>
     </Card>
   );
@@ -882,10 +889,14 @@ function ProductPager({
   onPageChange: (pageIndex: number) => void;
   onPageSizeChange: (pageSize: number) => void;
 }) {
+  if (total === 0) {
+    return null;
+  }
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-      <span className="text-muted-foreground">
-        共 {total} 个产品 · 第 {pageIndex + 1} / {pageCount} 页
+      <span className="tabular-nums text-muted-foreground">
+        第 {pageIndex + 1} / {pageCount} 页
       </span>
       <div className="flex flex-wrap items-center gap-2">
         <Select
@@ -908,15 +919,6 @@ function ProductPager({
           variant="outline"
           size="sm"
           disabled={pageIndex === 0}
-          onClick={() => onPageChange(0)}
-        >
-          首页
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={pageIndex === 0}
           onClick={() => onPageChange(pageIndex - 1)}
         >
           上一页
@@ -929,15 +931,6 @@ function ProductPager({
           onClick={() => onPageChange(pageIndex + 1)}
         >
           下一页
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={pageIndex >= pageCount - 1}
-          onClick={() => onPageChange(pageCount - 1)}
-        >
-          末页
         </Button>
       </div>
     </div>
@@ -1050,6 +1043,9 @@ function ProductDetailDialog({
   }
 
   const related = relatedProducts(product, products);
+  const relatedRows = related.filter(
+    (item) => productKey(item) !== productKey(product),
+  );
   const duplicating = duplicatingProductKey === productKey(product);
 
   async function uploadProductImage(file: File | null) {
@@ -1108,15 +1104,33 @@ function ProductDetailDialog({
       <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle className="text-xl">{product.name}</DialogTitle>
-          <DialogDescription>{product.description}</DialogDescription>
+          {hasDescription(product) ? (
+            <DialogDescription>{product.description}</DialogDescription>
+          ) : null}
         </DialogHeader>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusPill
+            label={
+              product.selectionStatus === "verified" ? "参数已核" : "参数待核"
+            }
+            tone={product.selectionStatus === "verified" ? "ok" : "warn"}
+          />
+          <StatusPill
+            label={
+              product.pricingStatus === "verified" ? "价格已核" : "价格待核"
+            }
+            tone={product.pricingStatus === "verified" ? "ok" : "danger"}
+          />
+        </div>
+
         <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
-          <div className="space-y-3">
+          <div className="space-y-4">
             <ProductImage product={product} className="aspect-square w-full" />
             {canManage && (
               <label
                 className={cn(
-                  "inline-flex h-8 w-full cursor-pointer items-center justify-center gap-1.5 rounded-2xl border border-border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted",
+                  "inline-flex h-8 w-full cursor-pointer items-center justify-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted",
                   (!product.id || isUploadingImage) &&
                     "pointer-events-none opacity-50",
                 )}
@@ -1139,15 +1153,21 @@ function ProductDetailDialog({
                 />
               </label>
             )}
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <InfoTile label="售价" value={productPrice(product)} />
-              <InfoTile label="成本" value={money(product.cost)} />
-              <InfoTile
-                label="库存"
-                value={`${product.stock} ${product.unit}`}
-              />
-              <InfoTile label="毛利" value={productMargin(product)} />
-            </div>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+              <SpecValue label="售价" value={productPrice(product)} />
+              {product.cost != null ? (
+                <SpecValue label="成本" value={money(product.cost)} />
+              ) : null}
+              {product.stock > 0 ? (
+                <SpecValue
+                  label="库存"
+                  value={`${product.stock} ${product.unit}`}
+                />
+              ) : null}
+              {product.price > 0 && product.cost > 0 ? (
+                <SpecValue label="毛利" value={productMargin(product)} />
+              ) : null}
+            </dl>
             <div className={cn("grid gap-2", canManage ? "grid-cols-2" : "grid-cols-1")}>
               {canManage && (
                 <Button
@@ -1177,63 +1197,79 @@ function ProductDetailDialog({
             </div>
             <TagList tags={product.tags} />
           </div>
-          <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <InfoTile label="平台" value={product.platform} />
-              <InfoTile label="品牌" value={product.brand} />
-              <InfoTile label="分类" value={product.category} />
-              <InfoTile label="设备类型" value={findDeviceType(product.deviceTypeId ?? "")?.name ?? "待整理"} />
-              <InfoTile label="规格身份" value={product.catalogKind === "sku" ? "具体 SKU" : product.catalogKind === "series" ? "产品系列" : "旧资料待整理"} />
-              <InfoTile label="参数/价格核验" value={`${product.selectionStatus === "verified" ? "参数已核" : "参数待核"} · ${product.pricingStatus === "verified" ? "价格已核" : "价格待核"}`} />
-            </div>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">同组规格与售价</CardTitle>
-                <CardDescription>
-                  按同品牌、同平台、同分类自动聚合，方便报价选型对比。
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>规格产品</TableHead>
-                      <TableHead>SKU</TableHead>
-                      <TableHead className="text-right">售价</TableHead>
-                      <TableHead className="text-right">库存</TableHead>
-                      <TableHead className="text-right">操作</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {related.map((item) => (
-                      <TableRow key={item.id ?? item.sku}>
-                        <TableCell className="whitespace-normal font-medium">
-                          {item.name}
-                        </TableCell>
-                        <TableCell>{item.sku}</TableCell>
-                        <TableCell className="text-right font-semibold">
-                          {productPrice(item)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {item.stock} {item.unit}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => onAddToQuote(item)}
-                          >
-                            <Plus className="size-4" />
-                            加入
-                          </Button>
-                        </TableCell>
+          <div className="space-y-5">
+            <section className="space-y-2">
+              <h3 className="text-sm font-semibold">规格</h3>
+              <dl className="divide-y divide-border">
+                <SpecRow label="平台" value={product.platform} />
+                <SpecRow label="品牌" value={product.brand} />
+                <SpecRow label="分类" value={product.category} />
+                <SpecRow
+                  label="设备类型"
+                  value={findDeviceType(product.deviceTypeId ?? "")?.name ?? "待整理"}
+                />
+                <SpecRow
+                  label="规格身份"
+                  value={
+                    product.catalogKind === "sku"
+                      ? "具体 SKU"
+                      : product.catalogKind === "series"
+                        ? "产品系列"
+                        : "旧资料待整理"
+                  }
+                />
+              </dl>
+            </section>
+            {relatedRows.length > 0 ? (
+              <section className="space-y-2">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h3 className="text-sm font-semibold">同组规格与售价</h3>
+                  <p className="text-xs text-muted-foreground">
+                    同品牌、同平台、同分类
+                  </p>
+                </div>
+                <div className="overflow-hidden rounded-lg bg-muted/40">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>规格产品</TableHead>
+                        <TableHead>SKU</TableHead>
+                        <TableHead className="text-right">售价</TableHead>
+                        <TableHead className="text-right">库存</TableHead>
+                        <TableHead className="text-right">操作</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {relatedRows.map((item) => (
+                        <TableRow key={item.id ?? item.sku}>
+                          <TableCell className="whitespace-normal font-medium">
+                            {item.name}
+                          </TableCell>
+                          <TableCell>{item.sku}</TableCell>
+                          <TableCell className="text-right font-semibold tabular-nums">
+                            {productPrice(item)}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {item.stock} {item.unit}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => onAddToQuote(item)}
+                            >
+                              <Plus className="size-4" />
+                              加入
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </section>
+            ) : null}
           </div>
         </div>
       </DialogContent>
@@ -1344,7 +1380,7 @@ function ProductImage({
           src={product.image}
           alt={product.name}
           fill
-          unoptimized={isSvgImage(product.image)}
+          unoptimized={needsDirectImageLoad(product.image)}
           sizes="(min-width: 1280px) 25vw, (min-width: 768px) 50vw, 100vw"
           className="object-contain p-4"
           onError={() => setFailedImage(product.image)}
@@ -1360,10 +1396,16 @@ function ProductImage({
 }
 
 function TagList({ tags }: { tags: string[] }) {
+  const visibleTags = tags.filter((tag) => tag && tag !== "???");
+
+  if (visibleTags.length === 0) {
+    return null;
+  }
+
   return (
     <div className="flex flex-wrap gap-1.5">
-      {tags.map((tag) => (
-        <Badge key={tag} variant={tag === "???" ? "destructive" : "outline"}>
+      {visibleTags.map((tag) => (
+        <Badge key={tag} variant="secondary">
           {tag}
         </Badge>
       ))}
@@ -1371,45 +1413,107 @@ function TagList({ tags }: { tags: string[] }) {
   );
 }
 
-function InfoTile({ label, value }: { label: string; value: string }) {
+/** 详情页的字段值，不带边框，避免对话框里再套一层卡片。 */
+function SpecValue({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="rounded-lg border bg-muted/20 p-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-1 text-sm font-medium">{value}</div>
+    <div>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 text-sm font-medium tabular-nums">{value}</dd>
     </div>
+  );
+}
+
+/** 详情页的字段行，用 1px 分隔线分组；空值不渲染。 */
+function SpecRow({ label, value }: { label: string; value: React.ReactNode }) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  return (
+    <div className="flex items-baseline justify-between gap-4 py-2">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="text-right text-sm font-medium">{value}</dd>
+    </div>
+  );
+}
+
+type StatusTone = "neutral" | "ok" | "warn" | "danger";
+
+const statusToneClass: Record<StatusTone, string> = {
+  neutral: "",
+  ok: "text-muted-foreground",
+  warn: "border-warning/40 bg-warning/10 text-foreground",
+  danger: "border-destructive/30 bg-destructive/10 text-destructive-strong",
+};
+
+const statusDotClass: Record<StatusTone, string> = {
+  neutral: "bg-muted-foreground",
+  ok: "bg-success",
+  warn: "bg-warning",
+  danger: "bg-destructive",
+};
+
+/** 状态标注：色点 + 文字，保证「未核验」这类承诺在卡片上看得见。 */
+function StatusPill({ label, tone }: { label: string; tone: StatusTone }) {
+  if (tone === "neutral") {
+    return <Badge variant="secondary">{label}</Badge>;
+  }
+
+  return (
+    <Badge variant="outline" className={statusToneClass[tone]}>
+      <span
+        aria-hidden="true"
+        className={cn("size-1.5 rounded-full", statusDotClass[tone])}
+      />
+      {label}
+    </Badge>
   );
 }
 
 function QualityBadge({ product }: { product: Product }) {
   if (product.status !== "active" && product.status !== "approved") {
-    return <Badge variant="secondary">停用</Badge>;
+    return <StatusPill label="停用" tone="neutral" />;
+  }
+
+  if (product.catalogKind === "series") {
+    return <StatusPill label="产品系列" tone="neutral" />;
   }
 
   if (product.catalogKind !== "sku" || product.selectionStatus !== "verified") {
-    return <Badge variant="outline">{product.catalogKind === "series" ? "产品系列" : "待核规格"}</Badge>;
+    return <StatusPill label="待核规格" tone="warn" />;
   }
 
   if (product.pricingStatus !== "verified") {
-    return <Badge variant="destructive">待核价</Badge>;
+    return <StatusPill label="待核价" tone="danger" />;
   }
 
-  if (product.cost <= 0) {
-    return <Badge variant="outline">待补成本</Badge>;
+  if (product.cost == null || product.cost <= 0) {
+    return <StatusPill label="待补成本" tone="warn" />;
   }
 
-  return <Badge>可报价</Badge>;
+  return <StatusPill label="可报价" tone="ok" />;
 }
 
 function StockBadge({ product }: { product: Product }) {
   if (product.stock <= 0) {
-    return <Badge variant="destructive">缺货</Badge>;
+    return <StatusPill label="缺货" tone="danger" />;
   }
 
   if (product.stock < 10) {
-    return <Badge variant="secondary">低库存 {product.stock}</Badge>;
+    return <StatusPill label={`低库存 ${product.stock}`} tone="warn" />;
   }
 
-  return <Badge variant="outline">库存 {product.stock}</Badge>;
+  return <StatusPill label={`库存 ${product.stock}`} tone="ok" />;
+}
+
+const EMPTY_PRODUCT_DESCRIPTIONS = new Set(["暂无产品说明", "暂无描述", "无"]);
+
+function hasDescription(product: Product) {
+  const description = product.description?.trim() ?? "";
+
+  return (
+    description.length > 0 && !EMPTY_PRODUCT_DESCRIPTIONS.has(description)
+  );
 }
 
 function productPrice(product: Product) {

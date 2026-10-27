@@ -1,10 +1,41 @@
 import { applyPointMapPlanPatch, type PointMapPlan, type PointMapPosition, type PointMapPresentation, type PresentationAffineMatrix } from "./point-map-plan";
+import { activePointMapFloor } from "./point-map-design";
 import { fingerprintFloorplan, parsePointMapPresentation } from "./point-map-presentation";
 import { cropCadWindow, cropPercentPosition, findFloorplanCrop, validateFloorplanCrop } from "./point-map-crop-geometry.mjs";
 import { pointMapImageSize } from "./point-map-image-size.mjs";
 import { parseCadBinding } from "./point-map-cad-contract";
 
 export type FloorplanCrop = { left: number; top: number; width: number; height: number };
+
+/** The backup can yield to new edits or navigation; check again before replacing the draft. */
+export async function commitPointMapFloorplanCrop({
+  before, next, floorId, source, current, backup, apply,
+}: {
+  before: PointMapPlan;
+  next: PointMapPlan;
+  floorId: string;
+  source: string;
+  current: () => { plan: PointMapPlan; projectId: string; editingDisabled: boolean };
+  backup: () => Promise<boolean>;
+  apply: (plan: PointMapPlan) => void;
+}) {
+  function assertCurrent() {
+    const context = current();
+    const floor = activePointMapFloor(context.plan);
+    if (
+      context.plan !== before ||
+      context.projectId !== before.projectId ||
+      floor?.id !== floorId ||
+      floor.floorplanDataUrl !== source ||
+      context.editingDisabled
+    ) throw new Error("整理期间草稿、楼层或编辑权限已变化，请在当前草稿上重试。");
+  }
+  assertCurrent();
+  const backupStored = await backup();
+  assertCurrent();
+  apply(next);
+  return backupStored;
+}
 
 /** Atomic coordinate migration: preserve actual CAD positions and presentation calibration. */
 export async function applyPointMapFloorplanCrop(plan: PointMapPlan, floorId: string, expectedSource: string, crop: FloorplanCrop,

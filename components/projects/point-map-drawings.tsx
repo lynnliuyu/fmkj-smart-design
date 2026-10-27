@@ -1,7 +1,15 @@
 "use client";
 
 import * as React from "react";
+import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { applyReferenceDrawingBundle, attachReferenceDrawing, drawingViewLabels, type DrawingView, type ReferenceDrawingKind } from "@/lib/point-map-reference-drawings";
 import type { PointMapFloor, PointMapPlan, PointMapPosition } from "@/lib/point-map-plan";
@@ -67,16 +75,40 @@ export function PointMapDrawings({ plan, floor, view, disabled, onSelect, onAppl
     finally { setBusy(false); }
   }
   const candidateFloor = candidate?.plan.floors?.find((item) => item.id === candidate.floorId);
-  return <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+  // 现在挂在工作台工具栏那一行里，所以不再自带边框和下边距。
+  return <div className="flex flex-wrap items-center gap-2">
     <div className="flex flex-wrap items-center gap-2">
       <span className="mr-1 text-sm font-medium">图纸对照</span>
-      {(["layout", "lighting", "switch"] as const).map((kind) => <Button key={kind} size="sm" variant={view === kind ? "secondary" : "outline"} aria-pressed={view === kind} onClick={() => { setError(""); onSelect(kind); }}>
-        {drawingViewLabels[kind]}{kind !== "layout" && !floor?.references?.[kind] ? " · 未导入" : ""}
-      </Button>)}
-      {view !== "layout" ? <Button size="sm" variant="outline" disabled={disabled || busy || !floor?.floorplanDataUrl} onClick={() => fileRef.current?.click()}>{floor?.references?.[view] ? "更换并重新配准" : "添加并配准"}</Button> : null}
-      <Button size="sm" variant="ghost" disabled={disabled || busy || !floor?.floorplanDataUrl} onClick={() => bundleRef.current?.click()}>导入已配准图纸包</Button>
+      {/* 原来是三个页签按钮加两个导入按钮，一排挤了 5 个控件。收成一个下拉：当前视图写在按钮上，点开再切。 */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="sm" variant="outline">
+            {drawingViewLabels[view]}
+            {view !== "layout" && !floor?.references?.[view] ? " · 未导入" : ""}
+            <ChevronDown className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-60">
+          {(["layout", "lighting", "switch"] as const).map((kind) => (
+            <DropdownMenuItem key={kind} onSelect={() => { setError(""); onSelect(kind); }}>
+              <span className="flex-1">{drawingViewLabels[kind]}</span>
+              {kind !== "layout" && !floor?.references?.[kind] ? (
+                <span className="text-xs text-muted-foreground">未导入</span>
+              ) : null}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+          {view !== "layout" ? (
+            <DropdownMenuItem disabled={disabled || busy || !floor?.floorplanDataUrl} onSelect={() => fileRef.current?.click()}>
+              {floor?.references?.[view] ? "更换并重新配准" : "添加并配准当前对照图"}
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem disabled={disabled || busy || !floor?.floorplanDataUrl} onSelect={() => bundleRef.current?.click()}>
+            导入已配准图纸包
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
-    <p className="text-xs leading-5 text-muted-foreground">布局净底是布点基准。灯光 / 开关图配准后可在同一位置切换对照，点位和缩放保持；对照图不替换客户交付底图。</p>
     <input ref={fileRef} type="file" className="hidden" aria-label="添加灯光或开关对照图" accept="image/png,image/jpeg,image/webp" disabled={disabled || busy} onChange={(event) => { void upload(event.target.files?.[0] ?? null); event.currentTarget.value = ""; }} />
     <input ref={bundleRef} type="file" className="hidden" aria-label="导入已配准图纸包" accept="application/json,.json" disabled={disabled || busy} onChange={(event) => { void importBundle(event.target.files?.[0] ?? null); event.currentTarget.value = ""; }} />
     {message ? <p role="status" className="text-xs">{message}</p> : null}

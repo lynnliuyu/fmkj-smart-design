@@ -4,6 +4,43 @@ import { getPool, hasDatabaseUrl } from "./server-db"
 
 export const platformSettingDefinitions = [
   {
+    description: "印在报价单和客户方案上的公司名。留空就用默认品牌；客户拿到的是自己公司的名字才像样。",
+    key: "BRAND_NAME",
+    label: "报价单上的公司名",
+    placeholder: "例如：杭州某某智能家居",
+    type: "text",
+  },
+  {
+    description: "印在报价单和方案左上角的 logo。可以直接上传图片，也可以填站内地址或 https 图片地址。",
+    key: "BRAND_LOGO_URL",
+    label: "报价单上的 logo",
+    placeholder: "上传后自动填入，或填 https://...",
+    type: "image",
+  },
+  {
+    description: "印在报价单上的联系方式，例如「电话 / 微信：13800000000」。留空则不印。",
+    key: "BRAND_CONTACT",
+    label: "报价单上的联系方式",
+    maxLength: 60,
+    placeholder: "电话 / 微信：13800000000",
+    type: "text",
+  },
+  {
+    description: "印在报价单上的门店或公司地址。留空则不印。",
+    key: "BRAND_ADDRESS",
+    label: "报价单上的地址",
+    maxLength: 120,
+    placeholder: "例如：杭州市西湖区某路 1 号 2 楼",
+    type: "text",
+  },
+  {
+    description: "印在报价单末尾的二维码（微信、企业微信、收款码等都行）。留空则不印。",
+    key: "BRAND_QR_URL",
+    label: "报价单上的二维码",
+    placeholder: "上传后自动填入",
+    type: "image",
+  },
+  {
     description: "后台和客户访问时展示的主站域名；DNS 和反向代理仍需在部署平台配置。",
     key: "APP_PRIMARY_DOMAIN",
     label: "主域名",
@@ -47,7 +84,7 @@ export type PlatformSetting = {
   key: PlatformSettingKey
   label: string
   placeholder: string
-  type: "email" | "textarea" | "url"
+  type: "email" | "image" | "text" | "textarea" | "url"
   updatedAt: string | null
   value: string
 }
@@ -133,7 +170,7 @@ export async function updatePlatformSettings({
   return listPlatformSettings()
 }
 
-export type PlatformSettingsErrorCode = "DATABASE_REQUIRED" | "EMPTY_SETTINGS" | "INVALID_EMAIL" | "INVALID_URL"
+export type PlatformSettingsErrorCode = "DATABASE_REQUIRED" | "EMPTY_SETTINGS" | "INVALID_EMAIL" | "INVALID_URL" | "TOO_LONG"
 
 export class PlatformSettingsError extends Error {
   code: PlatformSettingsErrorCode
@@ -154,6 +191,7 @@ export function platformSettingsErrorResponse(error: unknown) {
       EMPTY_SETTINGS: "没有可保存的配置项",
       INVALID_EMAIL: "请输入有效的邮箱地址",
       INVALID_URL: "请输入以 http:// 或 https:// 开头的域名",
+      TOO_LONG: "这一项太长了，请精简到 60 个字以内",
     }
 
     return Response.json({ error: messages[error.code] }, { status: error.status })
@@ -179,10 +217,17 @@ async function ensurePlatformSettingsTable(db: Queryable) {
   `)
 }
 
-function validateSettingValue(key: PlatformSettingKey, value: string) {
+/**
+ * 单个配置项的校验。导出给测试用：不连数据库也能验证「什么样的值会被拒绝」，
+ * 与 updatePlatformSettings 里走的是同一段逻辑。
+ */
+export function validateSettingValue(key: PlatformSettingKey, value: string) {
   if (!value) return
 
-  const definition = platformSettingDefinitions.find((item) => item.key === key)
+  // 定义表是 as const，这里只看校验需要的两个字段，避免把联合类型摊开写。
+  const definition: { maxLength?: number; type?: string } | undefined = platformSettingDefinitions.find(
+    (item) => item.key === key,
+  )
 
   if (definition?.type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
     throw new PlatformSettingsError("INVALID_EMAIL")
@@ -190,5 +235,14 @@ function validateSettingValue(key: PlatformSettingKey, value: string) {
 
   if (definition?.type === "url" && !/^https?:\/\/\S+\.\S+/.test(value)) {
     throw new PlatformSettingsError("INVALID_URL")
+  }
+
+  // logo 既可以是站内上传得到的 /api/files/... 地址，也可以是外部 https 图片。
+  if (definition?.type === "image" && !(value.startsWith("/") || /^https?:\/\/\S+/.test(value))) {
+    throw new PlatformSettingsError("INVALID_URL")
+  }
+
+  if (definition?.type === "text" && value.length > (definition.maxLength ?? 60)) {
+    throw new PlatformSettingsError("TOO_LONG")
   }
 }

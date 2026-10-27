@@ -24,6 +24,10 @@ extra_hosts:
 
 ## Build and start
 
+> 构建镜像需要至少 4GB Docker 内存（Next 编译在容器内跑）。Docker Desktop 默认常只有
+> 1–2GB，会 OOM 并拖垮整个 Docker 守护进程。用 `node scripts/deploy/build-release.mjs`
+> 发布时脚本会先检查内存；手工 `docker compose build` 前请自行确认。
+
 ```bash
 docker compose build
 docker compose up -d

@@ -40,7 +40,13 @@ export type QuoteDraftItem = QuoteDraftProduct & {
   pointMapRevision?: number
 }
 
-export type PointMapQuoteSnapshot = { projectId: string; revision?: number; items: QuoteDraftItem[] }
+export type PointMapQuoteSnapshot = {
+  projectId: string
+  revision?: number
+  items: QuoteDraftItem[]
+  /** 点位图里实际用到的房间（含「楼层 / 房间」的写法）。报价单的房间清单只认这一份。 */
+  rooms?: string[]
+}
 
 export function consumePointMapQuoteSnapshot(projectId: string, storage: PointMapStorage | undefined = quoteStorage()): PointMapQuoteSnapshot | null {
   if (!storage) return null

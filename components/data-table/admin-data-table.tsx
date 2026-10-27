@@ -61,6 +61,11 @@ type AdminDataTableFilter = {
   title: string
 }
 
+const PAGE_SIZE_OPTIONS = [5, 10, 20]
+const MIN_PAGE_SIZE = PAGE_SIZE_OPTIONS[0]
+/** 少于这个数量的可隐藏列就不给「列显示」入口：四列的表格藏一列没有意义。 */
+const MIN_HIDEABLE_COLUMNS_FOR_PICKER = 5
+
 type AdminDataTableProps<TData, TValue> = {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
@@ -140,8 +145,13 @@ export function AdminDataTable<TData, TValue>({
   const currentPage = table.getState().pagination.pageIndex + 1
   const pageCount = Math.max(1, table.getPageCount())
   const selectedCount = table.getFilteredSelectedRowModel().rows.length
+  const totalRows = table.getFilteredRowModel().rows.length
   const isFiltered =
     table.getState().columnFilters.length > 0 || Boolean(table.getState().globalFilter)
+  // 「列显示」只在真正有得选的时候出现。
+  const hideableColumns = table.getAllColumns().filter((column) => column.getCanHide())
+  // 只有一页、行数又不超过最小页容量时，每页选择与翻页按钮都无事可做。
+  const paginationUseful = pageCount > 1 || totalRows > MIN_PAGE_SIZE
 
   return (
     <div className="space-y-4">
@@ -195,20 +205,18 @@ export function AdminDataTable<TData, TValue>({
             </Button>
           ) : null}
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="h-9">
-              <Settings2 className="size-4" />
-              列显示
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-40">
-            <DropdownMenuLabel>显示字段</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {table
-              .getAllColumns()
-              .filter((column) => column.getCanHide())
-              .map((column) => (
+        {hideableColumns.length >= MIN_HIDEABLE_COLUMNS_FOR_PICKER ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9">
+                <Settings2 className="size-4" />
+                列显示
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuLabel>显示字段</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {hideableColumns.map((column) => (
                 <DropdownMenuCheckboxItem
                   key={column.id}
                   checked={column.getIsVisible()}
@@ -217,8 +225,9 @@ export function AdminDataTable<TData, TValue>({
                   {getColumnLabel(column.columnDef.header, column.id)}
                 </DropdownMenuCheckboxItem>
               ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
       </div>
 
       <div className="rounded-md border">
@@ -265,9 +274,12 @@ export function AdminDataTable<TData, TValue>({
 
       <div className="flex flex-col gap-4 px-1 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-sm text-muted-foreground">
-          已选择 {selectedCount} 条，共 {table.getFilteredRowModel().rows.length} 条匹配记录
+          {selectedCount > 0
+            ? `已选择 ${selectedCount} 条，共 ${totalRows} 条匹配记录`
+            : `共 ${totalRows} 条匹配记录`}
         </div>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+        {paginationUseful ? (
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium">每页</p>
             <Select
@@ -280,7 +292,7 @@ export function AdminDataTable<TData, TValue>({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent side="top">
-                {[5, 10, 20].map((size) => (
+                {PAGE_SIZE_OPTIONS.map((size) => (
                   <SelectItem key={size} value={`${size}`}>
                     {size}
                   </SelectItem>
@@ -333,7 +345,8 @@ export function AdminDataTable<TData, TValue>({
               <ChevronsRight className="size-4" />
             </Button>
           </div>
-        </div>
+          </div>
+        ) : null}
       </div>
     </div>
   )

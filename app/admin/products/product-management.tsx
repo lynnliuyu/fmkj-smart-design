@@ -15,6 +15,7 @@ import {
   Clock3,
   ImageIcon,
   Package,
+  Download,
   PackageCheck,
   PackageX,
   PauseCircle,
@@ -26,7 +27,15 @@ import {
   X,
 } from "lucide-react"
 
+import { specValueLabel } from "@/lib/device-spec-labels"
+import { brandNames, modelNames, seriesNames, type ProductDictionaries } from "@/lib/product-dictionary-types"
+import { PRODUCT_PLATFORMS, PRODUCT_PLATFORM_LABELS, formatProductPlatforms } from "@/lib/product-platforms"
+import { formatDateTime } from "@/lib/format-datetime"
 import type { AdminProduct, ProductModerationStatus } from "@/lib/product-admin-service"
+import { ProductDictionariesDialog } from "@/app/admin/products/product-dictionaries-dialog"
+import { CatalogLicensesDialog } from "@/app/admin/products/catalog-licenses-dialog"
+import { ProductImportDialog } from "@/app/admin/products/product-import-dialog"
+import { ProductSyncDialog } from "@/app/admin/products/product-sync-dialog"
 import { PlatformRowActionItem, PlatformRowActions } from "@/app/admin/_components/platform-list"
 import { FacetedFilter } from "@/components/common/faceted-filter"
 import { Badge } from "@/components/ui/badge"
@@ -64,6 +73,9 @@ type ProductDraft = Required<ProductSelectionFields> & {
   image: string
   name: string
   platform: string
+  series: string
+  /** 多值：一个设备常同时支持米家 + Apple Home */
+  platforms: string[]
   price: number
   sku: string
   status: ProductModerationStatus
@@ -73,6 +85,7 @@ type ProductDraft = Required<ProductSelectionFields> & {
 }
 
 type Props = {
+  dictionaries: ProductDictionaries
   initialProducts: AdminProduct[]
   reviewOnly?: boolean
 }
@@ -80,6 +93,9 @@ type Props = {
 type SortKey = "name" | "category" | "price" | "stock" | "status"
 type SortDir = "asc" | "desc"
 type BulkApproval = { scope: "selected" | "filtered"; products: AdminProduct[]; excluded: number }
+
+/** 「全部批准」每次提交多少条：接口每批有上限，前端自动分批，产品多也能一次点完。 */
+const BULK_APPROVE_CHUNK_SIZE = 200
 
 const statuses: ProductModerationStatus[] = ["pending_review", "approved", "rejected", "active", "inactive"]
 
@@ -93,7 +109,9 @@ const emptyDraft: ProductDraft = {
   image: "",
   name: "",
   platform: "",
+  platforms: [],
   price: 0,
+  series: "",
   sku: "",
   status: "pending_review",
   stock: 0,
@@ -101,7 +119,7 @@ const emptyDraft: ProductDraft = {
   unit: "个",
 }
 
-export function ProductManagement({ initialProducts, reviewOnly = false }: Props) {
+export function ProductManagement({ dictionaries, initialProducts, reviewOnly = false }: Props) {
   const [products, setProducts] = useState(initialProducts)
   const [draft, setDraft] = useState<ProductDraft>(emptyDraft)
   const [editingProductId, setEditingProductId] = useState<string | null>(null)
@@ -164,7 +182,7 @@ export function ProductManagement({ initialProducts, reviewOnly = false }: Props
       const category = product.category ?? OTHER_PRODUCT_CATEGORY
       const matchesSearch =
         query.length === 0 ||
-        [product.name, product.sku, product.brand, product.platform, product.category]
+        [product.name, product.sku, product.brand, product.platform, formatProductPlatforms(product.platforms), product.category]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(query))
       const matchesCategory = categoryFilter.length === 0 || categoryFilter.includes(category)
@@ -306,22 +324,37 @@ export function ProductManagement({ initialProducts, reviewOnly = false }: Props
   }
 
   async function approveProducts() {
-    if (!bulkApproval || bulkApproving || bulkApproval.products.length > 500) return
+    if (!bulkApproval || bulkApproving) return
     setBulkApproving(true)
     setBulkError("")
     setMessage("")
     try {
-      const response = await fetch("/api/admin/products/bulk-review", {
-        body: JSON.stringify({ products: bulkApproval.products.map(({ id, mappingRevision }) => ({ id, mappingRevision })) }),
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-      })
-      const data = await response.json()
-      if (!response.ok) {
-        throw new Error(data.details ? Object.values(data.details).join("；") : "批准失败，请刷新列表后重试")
+      // 接口每批有上限（防止一次请求拖死），但产品多的库（比如 700+ 条）不该逼操作者
+      // 手动分批。这里自动切片、顺序提交，边提交边更新列表让操作者看到进度。
+      const targets = bulkApproval.products.map(({ id, mappingRevision }) => ({ id, mappingRevision }))
+      const approvedIds = new Map<string, AdminProduct>()
+      let approved = 0
+      let skipped = 0
+      for (let start = 0; start < targets.length; start += BULK_APPROVE_CHUNK_SIZE) {
+        const chunk = targets.slice(start, start + BULK_APPROVE_CHUNK_SIZE)
+        const done = Math.min(start + BULK_APPROVE_CHUNK_SIZE, targets.length)
+        setMessage(`正在批准 ${done}/${targets.length}…`)
+        const response = await fetch("/api/admin/products/bulk-review", {
+          body: JSON.stringify({ products: chunk }),
+          headers: { "Content-Type": "application/json" },
+          method: "POST",
+        })
+        const data = await response.json()
+        if (!response.ok) {
+          throw new Error(data.details ? Object.values(data.details).join("；") : "批准失败，请刷新列表后重试")
+        }
+        approved += Number(data.approved ?? 0)
+        skipped += Number(data.skipped ?? 0)
+        for (const product of (data.products ?? []) as AdminProduct[]) approvedIds.set(product.id, product)
+        setProducts((current) => current.map((product) => approvedIds.get(product.id) ?? product))
       }
-      const summary = `已批准 ${data.approved} 件产品${data.skipped ? `，另有 ${data.skipped} 件已批准产品跳过` : ""}，参数与价格核验状态保持不变。`
-      const updatedProducts = new Map<string, AdminProduct>((data.products as AdminProduct[]).map((product) => [product.id, product]))
+      const summary = `已批准 ${approved} 件产品${skipped ? `，另有 ${skipped} 件已批准产品跳过` : ""}，参数与价格核验状态保持不变。`
+      const updatedProducts = approvedIds
       setProducts((current) => current.flatMap((product) => {
         const updated = updatedProducts.get(product.id) ?? product
         return reviewOnly && updated.status !== "pending_review" ? [] : [updated]
@@ -360,7 +393,7 @@ export function ProductManagement({ initialProducts, reviewOnly = false }: Props
     setProducts((current) => current.map((product) => {
       if (product.id !== productId) return product
       const next = { ...product, ...patch }
-      const intentChanged = ["catalogKind", "deviceTypeId", "parentProductId", "manufacturerModel", "specs", "protocols", "capabilities", "sku", "platform", "unit"].some((key) => Object.hasOwn(patch, key))
+      const intentChanged = ["catalogKind", "deviceTypeId", "parentProductId", "manufacturerModel", "specs", "protocols", "capabilities", "sku", "platform", "platforms", "unit"].some((key) => Object.hasOwn(patch, key))
       if (intentChanged) { next.selectionStatus = "pending"; next.pricingStatus = "pending" }
       if (Object.hasOwn(patch, "price") || Object.hasOwn(patch, "cost")) next.pricingStatus = "pending"
       return next
@@ -410,6 +443,19 @@ export function ProductManagement({ initialProducts, reviewOnly = false }: Props
             <RefreshCw />
             刷新
           </Button>
+          {!reviewOnly ? <CatalogLicensesDialog /> : null}
+          {!reviewOnly ? <ProductDictionariesDialog initial={dictionaries} /> : null}
+          {!reviewOnly ? <ProductImportDialog onImported={refresh} /> : null}
+          {!reviewOnly ? <ProductSyncDialog onImported={refresh} /> : null}
+          {!reviewOnly ? (
+            // 普通 <a>：响应带 Content-Disposition，浏览器直接落文件；同源请求自带登录态。
+            <Button variant="outline" asChild>
+              <a href="/api/admin/products/export" download>
+                <Download />
+                导出表格
+              </a>
+            </Button>
+          ) : null}
           {!reviewOnly ? (
             <Dialog>
               <DialogTrigger asChild>
@@ -422,7 +468,7 @@ export function ProductManagement({ initialProducts, reviewOnly = false }: Props
                 <DialogHeader>
                   <DialogTitle>新建产品</DialogTitle>
                 </DialogHeader>
-                <ProductForm draft={draft} products={products} onChange={(patch) => setDraft({ ...draft, ...patch })} />
+                <ProductForm dictionaries={dictionaries} draft={draft} products={products} onChange={(patch) => setDraft({ ...draft, ...patch })} />
                 {message ? <p role="status" className="text-sm text-muted-foreground">{message}</p> : null}
                 <Button onClick={createProduct}>
                   <Save />
@@ -562,7 +608,7 @@ export function ProductManagement({ initialProducts, reviewOnly = false }: Props
             “全部批准”处理当前全部筛选结果中的待审核产品，包含其他分页。批准后将在产品库显示；参数与价格核验状态保持原值。
           </p>
 
-          <div className="rounded-md border">
+          <div className="overflow-hidden rounded-lg bg-muted/40">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -718,11 +764,10 @@ export function ProductManagement({ initialProducts, reviewOnly = false }: Props
                 <span>{product.name}</span><span className="text-muted-foreground">{product.sku}</span>
               </li>)}
             </ul>
-            {bulkApproval.products.length > 500 ? <p role="alert" className="text-sm text-destructive">一次最多批准 500 件，请缩小筛选范围后操作。</p> : null}
             {bulkError ? <p role="alert" className="text-sm text-destructive">{bulkError}</p> : null}
             <div className="flex justify-end gap-2">
               <Button variant="outline" disabled={bulkApproving} onClick={() => setBulkApproval(null)}>取消</Button>
-              <Button disabled={bulkApproving || bulkApproval.products.length > 500} onClick={() => void approveProducts()}>
+              <Button disabled={bulkApproving} onClick={() => void approveProducts()}>
                 <PackageCheck />{bulkApproving ? "正在批准…" : `确认批准 ${bulkApproval.products.length} 件`}
               </Button>
             </div>
@@ -738,6 +783,7 @@ export function ProductManagement({ initialProducts, reviewOnly = false }: Props
           {editingProduct ? (
             <>
               <ProductForm
+                dictionaries={dictionaries}
                 draft={productToDraft(editingProduct)}
                 products={products.filter((product) => product.id !== editingProduct.id)}
                 onChange={(patch) => patchProduct(editingProduct.id, draftPatchToProduct(patch))}
@@ -756,7 +802,7 @@ export function ProductManagement({ initialProducts, reviewOnly = false }: Props
   )
 }
 
-function ProductForm({ draft, onChange, products }: { draft: ProductDraft; onChange: (patch: Partial<ProductDraft>) => void; products: AdminProduct[] }) {
+function ProductForm({ dictionaries, draft, onChange, products }: { dictionaries: ProductDictionaries; draft: ProductDraft; onChange: (patch: Partial<ProductDraft>) => void; products: AdminProduct[] }) {
   const deviceType = findDeviceType(draft.deviceTypeId)
   function setSpec(key: string, value: string | number | boolean | undefined) {
     const specs: DeviceSpecs = { ...draft.specs }
@@ -791,7 +837,20 @@ function ProductForm({ draft, onChange, products }: { draft: ProductDraft; onCha
           </SelectContent>
         </Select>
       </Field> : null}
-      <Field label="厂商型号"><Input value={draft.manufacturerModel ?? ""} onChange={(event) => onChange({ manufacturerModel: event.target.value || null })} /></Field>
+      <Field label="厂商型号">
+        <Select
+          value={draft.manufacturerModel || "__none"}
+          onValueChange={(value) => onChange({ manufacturerModel: value === "__none" ? null : value })}
+        >
+          <SelectTrigger><SelectValue placeholder="从字典选择" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none">未填</SelectItem>
+            {modelNames(dictionaries, draft.brand, draft.series, draft.manufacturerModel).map((name) => (
+              <SelectItem key={name} value={name}>{name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
       <Field label="名称">
         <Input value={draft.name} onChange={(event) => onChange({ name: event.target.value })} />
       </Field>
@@ -799,9 +858,50 @@ function ProductForm({ draft, onChange, products }: { draft: ProductDraft; onCha
         <Input value={draft.sku} onChange={(event) => onChange({ sku: event.target.value })} />
       </Field>
       <Field label="品牌">
-        <Input value={draft.brand} onChange={(event) => onChange({ brand: event.target.value })} />
+        <Select
+          value={draft.brand || "__none"}
+          onValueChange={(value) => onChange({ brand: value === "__none" ? "" : value, manufacturerModel: null, series: "" })}
+        >
+          <SelectTrigger><SelectValue placeholder="从字典选择" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none">未填</SelectItem>
+            {brandNames(dictionaries, draft.brand).map((name) => (
+              <SelectItem key={name} value={name}>{name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </Field>
-      <Field label="生态平台"><Input value={draft.platform} placeholder="如：米家（平台与通信协议分别填写）" onChange={(event) => onChange({ platform: event.target.value })} /></Field>
+      <Field label="系列">
+        <Select
+          value={draft.series || "__none"}
+          onValueChange={(value) => onChange({ series: value === "__none" ? "" : value })}
+        >
+          <SelectTrigger><SelectValue placeholder="从字典选择" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none">未填</SelectItem>
+            {seriesNames(dictionaries, draft.brand, draft.series).map((name) => (
+              <SelectItem key={name} value={name}>{name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label="生态平台（可多选）">
+        <div className="flex flex-wrap gap-2">
+          {PRODUCT_PLATFORMS.map((value) => {
+            const active = draft.platforms.includes(value)
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => onChange({ platforms: active ? draft.platforms.filter((item) => item !== value) : [...draft.platforms, value] })}
+                className={`rounded-full border px-3 py-1 text-sm transition-colors ${active ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground hover:border-foreground/40"}`}
+              >
+                {PRODUCT_PLATFORM_LABELS[value]}
+              </button>
+            )
+          })}
+        </div>
+      </Field>
       <Field label="分类">
         <Select value={draft.category || OTHER_PRODUCT_CATEGORY} onValueChange={(category) => onChange({ category })}>
           <SelectTrigger>
@@ -821,7 +921,7 @@ function ProductForm({ draft, onChange, products }: { draft: ProductDraft; onCha
         {deviceType.specs.map((spec) => <Field key={spec.key} label={`${spec.name}${spec.unit ? ` (${spec.unit})` : ""}${spec.required ? " *" : ""}`}>
           {spec.type === "boolean" || spec.values ? <Select value={draft.specs[spec.key] === undefined ? "unknown" : String(draft.specs[spec.key])} onValueChange={(value) => setSpec(spec.key, value === "unknown" ? undefined : spec.type === "boolean" ? value === "true" : value)}>
             <SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="unknown">待确认</SelectItem>
-              {spec.type === "boolean" ? <><SelectItem value="true">是</SelectItem><SelectItem value="false">否</SelectItem></> : spec.values?.map((value) => <SelectItem key={value} value={value}>{specValueLabels[value] ?? value}</SelectItem>)}
+              {spec.type === "boolean" ? <><SelectItem value="true">是</SelectItem><SelectItem value="false">否</SelectItem></> : spec.values?.map((value) => <SelectItem key={value} value={value}>{specValueLabel(value) ?? value}</SelectItem>)}
             </SelectContent>
           </Select> : <Input type={spec.type === "number" ? "number" : "text"} min={spec.min} max={spec.max} step={spec.integer ? 1 : "any"} value={String(draft.specs[spec.key] ?? "")} onChange={(event) => setSpec(spec.key, event.target.value === "" ? undefined : spec.type === "number" ? Number(event.target.value) : event.target.value)} />}
         </Field>)}
@@ -937,7 +1037,7 @@ function ProductRow({
       {visibleCols.brand ? (
         <TableCell>
           <div>{product.brand ?? "未设置"}</div>
-          <div className="text-xs text-muted-foreground">{product.platform ?? "未设置平台"}</div>
+          <div className="text-xs text-muted-foreground">{formatProductPlatforms(product.platforms, product.platform ?? "未设置平台")}</div>
         </TableCell>
       ) : null}
       <TableCell>
@@ -965,7 +1065,7 @@ function ProductRow({
       </TableCell>
       {visibleCols.review ? (
         <TableCell className="max-w-48 text-sm text-muted-foreground">
-          {product.reviewedAt ? new Date(product.reviewedAt).toLocaleString("zh-CN") : "未审核"}
+          {product.reviewedAt ? formatDateTime(product.reviewedAt) : "未审核"}
           {product.reviewNote ? <div className="truncate">{product.reviewNote}</div> : null}
         </TableCell>
       ) : null}
@@ -1070,6 +1170,8 @@ function productToDraft(product: AdminProduct): ProductDraft {
     image: product.image ?? "",
     name: product.name,
     platform: product.platform ?? "",
+    platforms: product.platforms ?? (product.platform ? [product.platform] : []),
+    series: product.series ?? "",
     price: product.price,
     sku: product.sku,
     status: product.status,
@@ -1092,6 +1194,8 @@ function draftPatchToProduct(patch: Partial<ProductDraft>): Partial<AdminProduct
   if (patch.image !== undefined) productPatch.image = patch.image
   if (patch.name !== undefined) productPatch.name = patch.name
   if (patch.platform !== undefined) productPatch.platform = patch.platform
+  if (patch.platforms !== undefined) productPatch.platforms = patch.platforms
+  if (patch.series !== undefined) productPatch.series = patch.series
   if (patch.price !== undefined) productPatch.price = patch.price
   if (patch.sku !== undefined) productPatch.sku = patch.sku
   if (patch.status !== undefined) productPatch.status = patch.status
@@ -1124,9 +1228,3 @@ function splitList(value: string) {
     .filter(Boolean)
 }
 
-const specValueLabels: Record<string, string> = {
-  neutral: "零火", "no-neutral": "单火", "dry-contact": "干接点", "low-voltage": "弱电",
-  "ac-mains": "交流市电", dc: "直流供电", poe: "PoE", battery: "电池", usb: "USB", passive: "无源",
-  indoor: "室内", outdoor: "室外", "indoor-outdoor": "室内外通用", ethernet: "有线网络", wifi: "Wi-Fi",
-  "ethernet-wifi": "有线 / Wi-Fi", cellular: "蜂窝网络", analog: "模拟信号",
-}

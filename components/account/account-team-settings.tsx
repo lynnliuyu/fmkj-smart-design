@@ -2,8 +2,6 @@
 
 import * as React from "react"
 import {
-  BriefcaseBusiness,
-  KeyRound,
   LockKeyhole,
   ShieldCheck,
   UserPlus,
@@ -121,7 +119,7 @@ export function AccountTeamSettings() {
       const response = await fetch("/api/account/team", { cache: "no-store" })
       const data = (await response.json()) as { team?: AccountTeam; error?: string }
       if (!response.ok || !data.team) {
-        toast.error(data.error ?? "团队信息加载失败")
+        toast.error(formatTeamError(data.error))
         return
       }
       setTeam(data.team)
@@ -184,13 +182,7 @@ export function AccountTeamSettings() {
     <section className="flex flex-col gap-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold tracking-tight">客户自身管理</h2>
-            <Badge variant="secondary" className="gap-1">
-              <BriefcaseBusiness className="size-3" />
-              客户主账号可见
-            </Badge>
-          </div>
+          <h2 className="text-lg font-semibold tracking-tight">客户自身管理</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             管理自己企业的套餐、团队成员、角色权限和协作边界，不包含总平台账号和系统开关。
           </p>
@@ -202,8 +194,8 @@ export function AccountTeamSettings() {
       </div>
 
       {!canManage && !loading ? (
-        <Card className="rounded-lg border-amber-300 bg-amber-50">
-          <CardContent className="p-4 text-sm text-amber-950">
+        <Card className="border-destructive/20 bg-destructive/10">
+          <CardContent className="p-4 text-sm text-destructive-strong">
             当前账号没有企业团队管理权限。客户主账号或拥有成员管理权限的账号才能创建成员、调整角色和查看团队席位。
           </CardContent>
         </Card>
@@ -217,16 +209,10 @@ export function AccountTeamSettings() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
-          <Card className="rounded-lg">
-            <CardHeader className="flex-row items-center justify-between gap-3">
-              <div>
-                <CardTitle className="text-base">团队成员</CardTitle>
-                <CardDescription>成员绑定角色，角色决定能看到和能操作的业务范围。</CardDescription>
-              </div>
-              <Button disabled={!canManage || loading} onClick={() => setCreateOpen(true)} size="sm">
-                <UserPlus className="size-4" />
-                创建成员
-              </Button>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">团队成员</CardTitle>
+              <CardDescription>成员绑定角色，角色决定能看到和能操作的业务范围。</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
@@ -275,7 +261,7 @@ export function AccountTeamSettings() {
           </Card>
 
           <div className="grid gap-4">
-            <Card className="rounded-lg">
+            <Card>
               <CardHeader>
                 <CardTitle className="text-base">角色</CardTitle>
                 <CardDescription>选择角色查看权限矩阵。</CardDescription>
@@ -295,16 +281,10 @@ export function AccountTeamSettings() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-lg">
-              <CardHeader className="flex-row items-start justify-between gap-3">
-                <div>
-                  <CardTitle className="text-base">{roleLabels[selectedRole]}权限矩阵</CardTitle>
-                  <CardDescription>按业务模块拆分查看、新建、修改、审批、分派和导出能力。</CardDescription>
-                </div>
-                <Badge>
-                  <KeyRound className="size-3" />
-                  {selectedRole}
-                </Badge>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">{roleLabels[selectedRole]}权限矩阵</CardTitle>
+                <CardDescription>按业务模块拆分查看、新建、修改、审批、分派和导出能力。</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
                 {Object.entries(rolePermissions[selectedRole]).map(([label, permissions]) => (
@@ -316,7 +296,7 @@ export function AccountTeamSettings() {
       </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="rounded-lg">
+        <DialogContent className="rounded-xl">
           <DialogHeader>
             <DialogTitle>创建成员</DialogTitle>
             <DialogDescription>直接创建企业成员账号，并为他分配初始角色和登录密码。</DialogDescription>
@@ -377,7 +357,7 @@ export function AccountTeamSettings() {
 
 function SummaryTile({ detail, label, value }: { detail: string; label: string; value: string }) {
   return (
-    <Card className="rounded-lg py-0">
+    <Card className="py-0">
       <CardContent className="p-3">
         <div className="text-xs text-muted-foreground">{label}</div>
         <div className="mt-1 text-xl font-semibold leading-6">{value}</div>
@@ -392,7 +372,7 @@ function UsageTile({ current, label, loading, max }: { current: number; label: s
   const value = unlimited ? 28 : Math.min(100, Math.round((current / max) * 100))
 
   return (
-    <Card className="rounded-lg py-0">
+    <Card className="py-0">
       <CardContent className="space-y-2 p-3">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -411,12 +391,12 @@ function UsageTile({ current, label, loading, max }: { current: number; label: s
 
 function PermissionRow({ label, permissions }: { label: string; permissions: string[] }) {
   return (
-    <div className="grid gap-3 rounded-lg border p-3 lg:grid-cols-[120px_1fr] lg:items-center">
+    <div className="grid gap-3 rounded-lg bg-muted/40 p-3 lg:grid-cols-[120px_1fr] lg:items-center">
       <div className="font-medium">{label}</div>
       <div className="flex flex-wrap gap-2">
         {permissions.length > 0 ? (
           permissions.map((permission) => (
-            <label key={permission} className="flex items-center gap-2 rounded-md border bg-muted/20 px-2.5 py-1.5 text-sm">
+            <label key={permission} className="flex items-center gap-2 rounded-md bg-background px-2.5 py-1.5 text-sm">
               <Switch checked disabled size="sm" />
               {permission}
             </label>
@@ -437,7 +417,11 @@ function formatMemberStatus(status: AccountTeamMember["status"]) {
 }
 
 function formatTeamError(error: string | undefined) {
+  if (error === "NOT_AUTHENTICATED") return "请先登录"
+  if (error === "ORGANIZATION_REQUIRED") return "当前账号尚未绑定企业，请联系企业负责人"
+  if (error === "ORGANIZATION_NOT_FOUND") return "企业信息不存在，请联系管理员"
   if (error === "VALID_EMAIL_REQUIRED") return "请输入有效邮箱"
+  if (error === "USER_ALREADY_EXISTS") return "该邮箱已注册，请换一个邮箱"
   if (error === "MEMBER_ALREADY_EXISTS") return "该成员已存在"
   if (error === "MEMBER_LIMIT_REACHED") return "成员席位已满"
   if (error === "ROLE_NOT_FOUND") return "角色不存在"

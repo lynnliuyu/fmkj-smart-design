@@ -81,12 +81,12 @@ function ProductVisualEditorBody({ product }: { product: NonNullable<Props["prod
         </div>
         <div className="space-y-2"><p className="text-sm font-medium">点位圆图预览</p><ProductVisualPreview visual={draft} /><p className="text-xs text-muted-foreground">预览裁切和大小；导出还会自动清理安全的白色留边。</p></div>
       </div>
-      <fieldset className="space-y-3 rounded-lg border p-4"><legend className="px-1 text-sm font-medium">裁切与主体大小</legend>
+      <fieldset className="space-y-3 rounded-lg bg-muted/40 p-4"><legend className="px-1 text-sm font-medium">裁切与主体大小</legend>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{([["x", "左侧"], ["y", "顶部"], ["width", "宽度"], ["height", "高度"]] as const).map(([key, label]) => <div key={key} className="space-y-1.5"><Label htmlFor={`${fieldId}-${key}`}>{label}（%）</Label><Input id={`${fieldId}-${key}`} type="number" min={key === "width" || key === "height" ? 0.1 : 0} max={100} step={0.1} value={Number((crop[key] * 100).toFixed(2))} onChange={(event) => patch({ crop: { ...crop, [key]: event.target.valueAsNumber / 100 } })} /></div>)}</div>
         <div className="flex flex-wrap items-center gap-3"><Label htmlFor={`${fieldId}-scale`}>主体大小 {Number.isFinite(draft.scale) ? draft.scale.toFixed(2) : "—"}×</Label><input id={`${fieldId}-scale`} aria-label="主体大小" type="range" className="h-8 min-w-40 flex-1 accent-primary" min={0.5} max={2} step={0.05} value={draft.scale} onChange={(event) => patch({ scale: event.target.valueAsNumber })} /><Button variant="outline" size="sm" type="button" onClick={() => patch({ crop: null, scale: 1 })}><RotateCcw />恢复自动裁切</Button></div>
       </fieldset>
       <div className="space-y-2"><Label htmlFor={`${fieldId}-evidence`}>图片依据与待核说明</Label><Textarea id={`${fieldId}-evidence`} value={draft.evidence ?? ""} onChange={(event) => patch({ evidence: event.target.value })} maxLength={4000} placeholder="厂家型号页、原图来源、采集日期；系列图请说明适用范围。" /></div>
-      <details className="rounded-lg border p-3"><summary className="cursor-pointer text-sm font-medium">查看保留的原图</summary><div className="mt-3 grid gap-4 sm:grid-cols-2"><ImageReference label="产品库原图" image={loaded.originalImage} /><ImageReference label="本次展示图原始素材" image={draft.sourceImage} /></div></details>
+      <details className="rounded-lg bg-muted/40 p-3"><summary className="cursor-pointer text-sm font-medium">查看保留的原图</summary><div className="mt-3 grid gap-4 sm:grid-cols-2"><ImageReference label="产品库原图" image={loaded.originalImage} /><ImageReference label="本次展示图原始素材" image={draft.sourceImage} /></div></details>
     </> : !error ? <p role="status" className="py-8 text-center text-muted-foreground">正在载入展示图…</p> : null}
     {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
     {message ? <p role="status" className="text-sm text-emerald-700">{message}</p> : null}

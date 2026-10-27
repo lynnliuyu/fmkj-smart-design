@@ -10,7 +10,6 @@ import {
   Loader2,
   LogIn,
   Mail,
-  MessageCircle,
   ShieldCheck,
   Smartphone,
 } from "lucide-react"
@@ -30,8 +29,13 @@ type LoginMode = "password" | "sms"
 
 export function LoginScreen({
   redirectTo = "/projects",
+  showSignUp = true,
+  showSmsLogin = true,
 }: {
   redirectTo?: string
+  // 设备版关掉自助注册、也没接短信服务时，这两个入口不该出现在登录页上
+  showSignUp?: boolean
+  showSmsLogin?: boolean
 }) {
   const [mode, setMode] = useState<LoginMode>("password")
   const [loading, setLoading] = useState(false)
@@ -280,27 +284,32 @@ export function LoginScreen({
                 <div className="absolute inset-0 flex items-center">
                   <span className="w-full border-t" />
                 </div>
-                <div className="relative flex justify-center text-xs uppercase">
+                <div className="relative flex justify-center text-xs">
                   <span className="bg-background px-2 text-muted-foreground">其他登录方式</span>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <Button type="button" variant="outline" className="h-10" onClick={() => resetState("sms")}>
+              {showSmsLogin ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 w-full"
+                  onClick={() => resetState("sms")}
+                >
                   <Smartphone className="size-4" />
-                  短信
+                  短信验证码登录
                 </Button>
-                <Button type="button" variant="outline" className="h-10" disabled>
-                  <MessageCircle className="size-4" />
-                  微信
-                </Button>
-              </div>
+              ) : null}
 
               <p className="text-center text-sm text-muted-foreground">
                 没有账号？{" "}
-                <Link href="/sign-up" className="font-medium text-foreground underline-offset-4 hover:underline">
-                  注册
-                </Link>
+                {showSignUp ? (
+                  <Link href="/sign-up" className="font-medium text-foreground underline-offset-4 hover:underline">
+                    注册
+                  </Link>
+                ) : (
+                  <span className="text-muted-foreground">请让管理员开通账号</span>
+                )}
               </p>
             </div>
           ) : (
@@ -419,7 +428,7 @@ function FieldError({ message }: { message: string }) {
   if (!message) return null
 
   return (
-    <div className="flex items-start gap-2 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+    <div className="flex items-start gap-2 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive-strong">
       <AlertCircle className="mt-0.5 size-4 shrink-0" />
       <span>{message}</span>
     </div>

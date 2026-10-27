@@ -1,6 +1,7 @@
 import { getPool } from "./server-db"
-import { projectVisibilityWhere } from "./project-access"
+import { lineAmount, sumMoney } from "./money"
 import type { AccountContext } from "./account-context"
+import { assertPermission, assertWritableMembership, requireContext, requireVisibleProject } from "./point-map-service"
 import { saveQuoteDraft, type QuoteItemPayload, type SaveQuoteDraftInput } from "./quote-save"
 import {
   computeModuleQuantity,
@@ -54,13 +55,22 @@ export async function generateQuickQuote(
     throw new QuickQuoteError("INVALID_ROOM_COUNT", 400)
   }
 
-  // 校验项目可见
-  const visibility = projectVisibilityWhere(context, 1)
-  const access = await getPool().query(
-    `select 1 from projects p where p.id = $1::uuid and p.deleted_at is null and (${visibility.where})`,
-    [projectId, ...visibility.params],
-  )
-  if (!access.rowCount) throw new QuickQuoteError("PROJECT_NOT_ACCESSIBLE", 404)
+  // 快速报价会直接写入报价草稿，必须和普通报价保存使用同一套项目写权限。
+  // 先锁定并校验项目，避免只读成员或订阅已过期的账号绕过报价页入口。
+  const account = requireContext(context, projectId)
+  const accessClient = await getPool().connect()
+  try {
+    await accessClient.query("begin")
+    const project = await requireVisibleProject(accessClient, account, projectId, true)
+    assertPermission(account, "project.edit")
+    assertWritableMembership(account, project)
+    await accessClient.query("commit")
+  } catch (error) {
+    await accessClient.query("rollback")
+    throw error
+  } finally {
+    accessClient.release()
+  }
 
   const items: QuoteItemPayload[] = []
   let subtotal = 0
@@ -75,8 +85,8 @@ export async function generateQuickQuote(
 
     const unitPrice = Number(product.price) || 0
     const cost = Number(product.cost) || 0
-    const lineTotal = unitPrice * qty
-    subtotal += lineTotal
+    const lineTotal = lineAmount(unitPrice, qty)
+    subtotal = sumMoney([subtotal, lineTotal])
 
     items.push({
       productId: product.id,
@@ -106,6 +116,7 @@ export async function generateQuickQuote(
   }
 
   const result = await saveQuoteDraft(saveInput, {
+    context: account,
     actorName: context.user.name,
     actorUserId: context.user.userId,
   })
@@ -138,7 +149,7 @@ async function pickProductForModule(
      where deleted_at is null
        and status = 'active'
        and category = $1
-       and platform = $2
+       and ($2 = any(coalesce(platforms, '{}'::text[])) or platform = $2)
        and price > 0
      order by price asc
      limit 1`,

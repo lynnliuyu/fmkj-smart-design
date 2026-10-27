@@ -1,7 +1,7 @@
 "use client"
 
 import { StatStrip } from "@/components/business/summary-tile"
-import { ProjectListHeader, ProjectSearchInput } from "@/components/business/project-list-shell";
+import { ProjectListHeader } from "@/components/business/project-list-shell";
 import { ProjectViewSwitch } from "@/components/projects/project-view-switch";
 import {
   fetchProjectListRows,
@@ -10,9 +10,9 @@ import {
   projectStageLabel,
 } from "@/lib/project-list";
 import { flushSync } from "react-dom"
+import { sumMoney } from "@/lib/money"
 import { releasePointMapPrintFloors, renderPointMapPrintFloors, waitForPrintImages, type PointMapPrintFloor } from "@/lib/point-map-print"
 import { prepareQuoteExportSource } from "@/lib/project-delivery-client"
-import { deliveryLineTotal, deliveryLineUnitPrice } from "@/lib/project-delivery"
 import { CategoryProductSwitch } from "@/components/quotes/category-product-switch";
 import Image from "next/image"
 import { useSearchParams } from "next/navigation"
@@ -34,12 +34,11 @@ import {
   UploadCloud,
 } from "lucide-react"
 
-import { SummaryTile } from "@/components/business/summary-tile"
-import { DocumentBrand, DocumentPrintFooter } from "@/components/business/document-brand"
-import { DOCUMENT_BRAND } from "@/lib/document-brand"
+import { QuotePrintDocument, type QuotePrintSnapshot } from "@/components/quotes/quote-print-document"
+import { resolveDocumentBrand, type DocumentBrand } from "@/lib/document-brand"
 import { quoteVerification, quoteVerificationLabel } from "@/lib/quote-verification"
 import { quoteDisplaySpec } from "@/lib/quote-spec"
-import { isSvgImage } from "@/lib/image-src"
+import { needsDirectImageLoad } from "@/lib/image-src"
 import { AdminDataTable } from "@/components/data-table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -107,22 +106,9 @@ import {
 } from "@/lib/quote-authoring"
 import { cn } from "@/lib/utils"
 
-type QuoteFloorImage = PointMapPrintFloor
-type QuotePrintSnapshot = {
-  deliveryVersion: number
-  quoteNo: string
-  date: string
-  discountTotal: number
-  floorImages: QuoteFloorImage[]
-  groups: Array<{ name: string; items: QuoteItem[] }>
-  installationFee: number
-  project: string
-  status: string
-  subtotal: number
-  total: number
-}
-
-export function QuoteBuilder() {
+export function QuoteBuilder({ brand }: { brand?: DocumentBrand } = {}) {
+  // 服务器把客户在后台填的公司名/logo 传进来；没填就用默认品牌。
+  const documentBrand = brand ?? resolveDocumentBrand()
   const searchParams = useSearchParams()
   const requestedProjectId = searchParams.get("projectId")
   const quote = useQuoteAuthoring({ requestedProjectId })
@@ -204,7 +190,7 @@ export function QuoteBuilder() {
       if (!printDocumentRef.current) throw new Error("报价打印内容尚未准备好，请重试。")
       await waitForPrintImages(printDocumentRef.current)
       saved.assertCurrent()
-      document.title = `${DOCUMENT_BRAND.companyName}-报价单${delivery ? `-V${delivery.version}` : ""}-${delivery?.project.name ?? saved.projectName}`
+      document.title = `${documentBrand.companyName}-报价单${delivery ? `-V${delivery.version}` : ""}-${delivery?.project.name ?? saved.projectName}`
       window.print()
     } catch (error) {
       setPdfError(`导出失败：${error instanceof Error ? error.message : "请重试。"}`)
@@ -240,7 +226,7 @@ export function QuoteBuilder() {
               />
             ) : null}
             {selectedProjectId ? (
-              <Button asChild variant="outline">
+              <Button asChild variant="ghost">
                 <a href={`/projects/${encodeURIComponent(selectedProjectId)}?tab=solution-quote`}>
                   <ArrowLeft className="size-4" />
                   返回项目
@@ -251,14 +237,9 @@ export function QuoteBuilder() {
               <Download className="size-4" />
               {isPreparingPdf ? "正在准备报价单…" : "预览 / 导出 PDF"}
             </Button>
-            <Button variant="outline" disabled={saveState === "saving" || isPreparingPdf || quote.state.isRefreshingImages || quote.state.isLoadingQuote || Boolean(quote.state.quoteLoadError)} onClick={async () => {
-              setImageRefreshNotice("")
-              const saved = await refreshDraftProductImages()
-              setImageRefreshNotice(saved ? "商品图片已更新，未保存的报价编辑继续保留。" : "商品图片未更新，请刷新报价后重试；本次未覆盖任何编辑。")
-            }}><RefreshCw className="size-4" />{quote.state.isRefreshingImages ? "正在更新图片…" : "更新商品图片"}</Button>
             <label
               className={cn(
-                "inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-2xl border border-border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted",
+                "inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-border bg-background px-4 text-sm font-medium transition-colors hover:bg-muted",
                 (!selectedProjectId || isUploadingPdf) && "pointer-events-none opacity-50"
               )}
             >
@@ -275,6 +256,32 @@ export function QuoteBuilder() {
                 }}
               />
             </label>
+            {/* 商品图片刷新是偶尔维护动作，收进菜单，工具栏只留日常要用的按钮。 */}
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="更多报价操作"
+                  disabled={saveState === "saving" || isPreparingPdf || quote.state.isRefreshingImages || quote.state.isLoadingQuote || Boolean(quote.state.quoteLoadError)}
+                >
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem
+                  disabled={quote.state.isRefreshingImages}
+                  onClick={async () => {
+                    setImageRefreshNotice("")
+                    const saved = await refreshDraftProductImages()
+                    setImageRefreshNotice(saved ? "商品图片已更新，未保存的报价编辑继续保留。" : "商品图片未更新，请刷新报价后重试；本次未覆盖任何编辑。")
+                  }}
+                >
+                  <RefreshCw className="size-4" />
+                  更新商品图片
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -373,17 +380,15 @@ export function QuoteBuilder() {
                 <TotalLine label={"\u8c03\u8bd5\u5b89\u88c5\u8d39\u7528"} value={money(installationFee)} />
                 <TotalLine label="应收合计" value={money(payableTotal)} strong />
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" onClick={saveDraft} disabled={saveState === "saving"}>
-                  {saveState === "saving"
-                    ? "\u4fdd\u5b58\u4e2d"
-                    : saveState === "saved"
-                      ? "\u5df2\u4fdd\u5b58"
-                      : saveState === "error"
-                        ? "\u4fdd\u5b58\u5931\u8d25"
-                        : "\u4fdd\u5b58\u8349\u7a3f"}
-                </Button>
-              </div>
+              <Button className="w-full" onClick={saveDraft} disabled={saveState === "saving"}>
+                {saveState === "saving"
+                  ? "\u4fdd\u5b58\u4e2d"
+                  : saveState === "saved"
+                    ? "\u5df2\u4fdd\u5b58"
+                    : saveState === "error"
+                      ? "\u4fdd\u5b58\u5931\u8d25"
+                      : "\u4fdd\u5b58\u8349\u7a3f"}
+              </Button>
             </CardContent>
           </Card>
         </div>
@@ -391,6 +396,7 @@ export function QuoteBuilder() {
 
       <QuotePrintDocument
         {...(printSnapshot ?? { deliveryVersion: 0, quoteNo: quote.state.quoteNo || "待保存", date: "", discountTotal, floorImages: [], groups, project: selectedProject, status, installationFee, subtotal, total: payableTotal })}
+        brand={documentBrand}
         documentRef={printDocumentRef}
       />
     </>
@@ -434,15 +440,6 @@ function QuoteIndex() {
     }
   }, [])
 
-  const visibleProjects = projects.filter((project) =>
-    projectMatchesQuery(query, [
-      project.name,
-      project.code,
-      project.customer,
-      project.stage,
-      projectStageLabel(project.stage),
-    ]),
-  )
   const previewProject = projects.find((project) => project.id === previewProjectId) ?? null
   const quotedProjects = projects.filter((project) => Number(project.quoteAmount ?? 0) > 0)
   const quoteTotal = quotedProjects.reduce((sum, project) => sum + Number(project.quoteAmount ?? 0), 0)
@@ -468,55 +465,41 @@ function QuoteIndex() {
 
   return (
     <section className="flex flex-col gap-5">
-      <ProjectListHeader
-        title="报价列表"
-        actions={
-          <ProjectSearchInput
-            value={query}
-            onChange={setQuery}
-            placeholder="搜索项目、客户、报价状态"
-          />
-        }
-      />
-
-      <StatStrip
-        items={[
-          { label: "项目数", value: projects.length },
-          { label: "已有报价", value: quotedProjects.length },
-          { label: "报价金额", value: money(quoteTotal) },
-        ]}
-      />
-
-      <div className="grid gap-5">
-        <Card>
-          <CardHeader>
-            <CardTitle>项目报价</CardTitle>
-            <CardDescription>{visibleProjects.length} 个匹配项目</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AdminDataTable
-              columns={quoteProjectColumns}
-              data={visibleProjects}
-              emptyText="没有匹配项目"
-              getRowId={(project) => project.id}
-              globalFilterFn={(project, value) =>
-                [project.name, project.code, project.customer, project.stage]
-                  .join(" ")
-                  .toLowerCase()
-                  .includes(value.toLowerCase())
-              }
-              searchPlaceholder="筛选报价项目..."
-            />
-          </CardContent>
-        </Card>
+      <div className="flex flex-col gap-3">
+        <ProjectListHeader title="报价列表" />
+        {/* 项目数、已有报价与表格内容重复，只保留表格里看不到的合计金额。 */}
+        {quoteTotal > 0 ? (
+          <StatStrip items={[{ label: "报价金额合计", value: money(quoteTotal) }]} />
+        ) : null}
       </div>
+
+      <AdminDataTable
+        columns={quoteProjectColumns}
+        data={projects}
+        emptyText="没有匹配项目"
+        getRowId={(project) => project.id}
+        globalFilter={query}
+        onGlobalFilterChange={setQuery}
+        globalFilterFn={(project, value) =>
+          projectMatchesQuery(value, [
+            project.name,
+            project.code,
+            project.customer,
+            project.stage,
+            projectStageLabel(project.stage),
+          ])
+        }
+        searchPlaceholder="搜索项目、客户、报价状态"
+      />
 
       <Sheet open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
         <SheetContent className="w-full sm:max-w-md">
           <SheetHeader className="text-start">
             <SheetTitle>报价预览</SheetTitle>
             <SheetDescription>
-              {previewProject ? `${previewProject.name} / ${previewProject.customer || "-"}` : "查看报价详情"}
+              {previewProject
+                ? [previewProject.name, previewProject.customer].filter(Boolean).join(" / ")
+                : "查看报价详情"}
             </SheetDescription>
           </SheetHeader>
           <div className="flex-1 overflow-y-auto px-4">
@@ -543,43 +526,40 @@ function createQuoteProjectColumns(onPreview: (project: QuoteProject) => void): 
     {
       accessorKey: "name",
       header: "项目",
-      cell: ({ row }) => (
-        <div>
-          <div className="font-medium">{row.original.name}</div>
-          <div className="mt-1 text-xs text-muted-foreground">{row.original.code || "-"}</div>
-        </div>
-      ),
-    },
-    {
-      accessorKey: "customer",
-      header: "客户",
-      cell: ({ row }) => row.original.customer || "-",
+      cell: ({ row }) => {
+        // 客户与项目编号合并到一行，缺哪项就不出现哪项的分隔符。
+        const meta = [row.original.customer, row.original.code].filter(Boolean).join(" / ")
+
+        return (
+          <div>
+            <div className="font-medium">{row.original.name}</div>
+            {meta ? <div className="mt-1 text-xs text-muted-foreground">{meta}</div> : null}
+          </div>
+        )
+      },
     },
     {
       accessorKey: "createdAt",
       header: "创建时间",
       cell: ({ row }) => (
-        <div className="text-muted-foreground">{formatProjectDate(row.original.createdAt)}</div>
+        <div className="tabular-nums text-muted-foreground">{formatProjectDate(row.original.createdAt)}</div>
       ),
     },
     {
       accessorKey: "stage",
-      header: "状态",
-      cell: ({ row }) => (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Badge variant={row.original.quoteAmount ? "default" : "outline"}>
-            {row.original.quoteAmount ? "已有报价" : "待报价"}
-          </Badge>
-          {row.original.stage ? <Badge variant="secondary">{row.original.stage}</Badge> : null}
-        </div>
-      ),
+      header: "阶段",
+      cell: ({ row }) => <Badge variant="secondary">{projectStageLabel(row.original.stage)}</Badge>,
     },
     {
       accessorKey: "quoteAmount",
-      header: "报价金额",
+      header: () => <div className="text-right">报价金额</div>,
       cell: ({ row }) => (
-        <div className="text-right font-medium">
-          {row.original.quoteAmount ? money(row.original.quoteAmount) : "待生成"}
+        <div className="text-right font-medium tabular-nums">
+          {row.original.quoteAmount ? (
+            money(row.original.quoteAmount)
+          ) : (
+            <span className="font-normal text-muted-foreground">待生成</span>
+          )}
         </div>
       ),
     },
@@ -615,7 +595,7 @@ function QuoteProjectActions({
           <DropdownMenuItem asChild>
             <a href={`/quotes?projectId=${encodeURIComponent(project.id)}`}>
               <Edit3 className="size-4" />
-              编辑报价
+              {project.quoteAmount ? "编辑报价" : "生成报价"}
             </a>
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
@@ -639,170 +619,20 @@ function QuoteProjectActions({
 
 function QuoteProjectPreview({ project }: { project: QuoteProject }) {
   return (
-    <div className="space-y-6 pb-4">
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={project.quoteAmount ? "default" : "outline"}>
-            {project.quoteAmount ? "已有报价" : "待报价"}
-          </Badge>
-          {project.stage ? <Badge variant="secondary">{project.stage}</Badge> : null}
-        </div>
-        <h2 className="text-base font-semibold leading-6">{project.name}</h2>
-        <p className="text-sm text-muted-foreground">
-          {project.code || "-"} / {project.customer || "-"}
-        </p>
-      </div>
+    <div className="space-y-5 pb-4">
+      <Badge variant="secondary">{projectStageLabel(project.stage)}</Badge>
 
-      <div className="grid gap-3 text-sm">
-        <SummaryTile label="客户" value={project.customer || "-"} />
-        <SummaryTile label="报价金额" value={project.quoteAmount ? money(project.quoteAmount) : "待生成"} />
-        <SummaryTile label="报价版本" value="当前草稿" />
-        <SummaryTile label="创建时间" value={formatProjectDate(project.createdAt)} />
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <Button asChild variant="outline">
-          <a href={`/projects/${encodeURIComponent(project.id)}?tab=quote`}>
-            <FolderKanban className="size-4" />
-            返回项目工作台
-          </a>
-        </Button>
+      {/* 项目名与客户已在抽屉标题里，这里只补充表格里没有的金额信息。 */}
+      <div className="flex items-center justify-between gap-4 border-b pb-3 text-sm">
+        <span className="text-muted-foreground">报价金额</span>
+        <span className="font-medium tabular-nums">
+          {project.quoteAmount ? money(project.quoteAmount) : "待生成"}
+        </span>
       </div>
     </div>
   )
 }
 
-
-function QuotePrintDocument({
-  deliveryVersion,
-  quoteNo,
-  date,
-  discountTotal,
-  documentRef,
-  floorImages,
-  groups,
-  installationFee,
-  project,
-  status,
-  subtotal,
-  total,
-}: QuotePrintSnapshot & { documentRef: React.Ref<HTMLElement> }) {
-  const visibleGroups = groups.filter((group) => group.items.length > 0)
-
-  return (
-    <article className="quote-document hidden" ref={documentRef}>
-      <header className="quote-document-hero">
-        <div>
-          <DocumentBrand />
-          <h1>智能家居方案报价单</h1>
-          <p>{project}</p>
-        </div>
-        <div className="quote-document-no">
-          <span>报价编号</span>
-          <strong>{quoteNo}</strong>
-          {deliveryVersion > 0 ? <span>方案版本 V{deliveryVersion}</span> : null}
-        </div>
-      </header>
-
-      <section className="quote-document-meta">
-        <InfoBlock label="客户项目" value={project} />
-        <InfoBlock label="报价状态" value={status} />
-        <InfoBlock label="有效期" value="15 天" />
-        <InfoBlock label="报价日期" value={date} />
-      </section>
-
-      <section className="quote-document-total">
-        <div>
-          <span>应收合计</span>
-          <strong>{money(total)}</strong>
-        </div>
-        <div className="quote-document-total-grid quote-document-total-grid-compact">
-          <TotalLine label={"\u4ea7\u54c1\u5408\u8ba1"} value={money(subtotal - discountTotal)} />
-          <TotalLine label={"\u8c03\u8bd5\u5b89\u88c5\u8d39\u7528"} value={money(installationFee)} />
-          <TotalLine label={"\u62a5\u4ef7\u603b\u4ef7"} value={money(total)} strong />
-        </div>
-      </section>
-
-      <section className="quote-document-sections">
-        {visibleGroups.map((group) => {
-          const groupTotal = group.items.reduce((sum, item) => sum + deliveryLineTotal(item), 0)
-
-          return (
-            <div key={group.name} className="quote-document-section">
-              <div className="quote-document-section-title">
-                <h2>{group.name}</h2>
-                <span>{money(groupTotal)}</span>
-              </div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>产品</th>
-                    <th>规格</th>
-                    <th>房间</th>
-                    <th>数量</th>
-                    <th>单价</th>
-                    <th>{"\u603b\u4ef7"}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {group.items.map((item) => (
-                    <tr key={item.lineId}>
-                      <td>
-                        <div className="quote-document-product">
-                          <ProductThumb product={item} eager />
-                          <div>
-                            <strong>{item.name}</strong>
-                            <span>{item.category}</span>
-                            <span>{quoteVerificationLabel(item)}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td>{quoteDisplaySpec(item.spec, item.name) || "—"}</td>
-                      <td>{item.room}</td>
-                      <td>
-                        {item.quantity} {item.unit}
-                      </td>
-                      <td>{money(deliveryLineUnitPrice(item))}</td>
-                      <td>{money(deliveryLineTotal(item))}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
-        })}
-      </section>
-
-      <footer className="quote-document-footer">
-        <div className="quote-document-company">
-          <strong>{DOCUMENT_BRAND.companyName}</strong>
-          <p>{"\u5ba2\u6237\u62a5\u4ef7\u4e13\u7528\u6587\u4ef6"}</p>
-        </div>
-        <div>
-          <strong>报价说明</strong>
-          <p>
-            报价含基础安装调试，不含强电改造和额外布线费用。最终金额以现场复核和客户确认版本为准。
-          </p>
-        </div>
-        <div>
-          <strong>客户确认</strong>
-          <p>签字：___________________　日期：___________________</p>
-        </div>
-      </footer>
-
-      <section className="quote-document-floors" aria-label="楼层点位图">
-        {floorImages.map(({ name, src }) => (
-          <figure key={name}>
-            <div className="quote-document-floor-kicker">楼层点位图</div>
-            <img src={src} alt={`${name} 点位方案`} />
-            <figcaption>{name} · 点位方案</figcaption>
-          </figure>
-        ))}
-      </section>
-      <DocumentPrintFooter />
-    </article>
-  )
-}
 
 function QuoteGroup({
   groupName,
@@ -821,7 +651,7 @@ function QuoteGroup({
   onUpdate: (lineId: string, patch: Partial<QuoteItem>) => void
   onRemove: (lineId: string) => void
 }) {
-  const groupTotal = items.reduce((sum, item) => sum + lineTotal(item), 0)
+  const groupTotal = sumMoney(items.map((item) => lineTotal(item)))
   const defaultRoom = rooms.includes(groupName) ? groupName : rooms[0] ?? "\u5168\u5c4b"
 
   return (
@@ -996,7 +826,8 @@ function ProductSearchDialog({
 
   return (
     <>
-      <Button type="button" size="sm" className="quote-print-hidden" onClick={() => setOpen(true)}>
+      {/* 每个分组都有一个入口，重复的主按钮会让全页没有主次；整页只留「保存草稿」一个近黑按钮。 */}
+      <Button type="button" size="sm" variant="outline" className="quote-print-hidden" onClick={() => setOpen(true)}>
         <Plus className="size-4" />
         {"\u6dfb\u52a0\u4ea7\u54c1"}
       </Button>
@@ -1238,7 +1069,7 @@ function ProductThumb({ product, eager = false }: { product: ProductOption; eage
         src={product.image}
         alt={product.name}
         fill
-        unoptimized={isSvgImage(product.image)}
+        unoptimized={needsDirectImageLoad(product.image)}
         className="object-contain p-1"
         sizes="48px"
       />

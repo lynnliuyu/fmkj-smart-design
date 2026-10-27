@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
@@ -21,7 +21,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
-import { ProjectListHeader, ProjectSearchInput } from "@/components/business/project-list-shell"
+import { ProjectListHeader } from "@/components/business/project-list-shell"
 import { StatStrip } from "@/components/business/summary-tile"
 import {
   PROJECT_STAGE_LABELS,
@@ -34,7 +34,6 @@ import {
 import { AdminDataTable } from "@/components/data-table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -208,6 +207,7 @@ const stages: Stage[] = [
 const initialProjects: Project[] = []
 
 export function ProjectFlow() {
+  const router = useRouter()
   const [projects, setProjects] = React.useState(initialProjects)
   const [projectOptions, setProjectOptions] = React.useState<ProjectOptionsResponse["data"]>({
     communities: [],
@@ -269,17 +269,7 @@ export function ProjectFlow() {
   }
 
   const filteredProjects = projects.filter((project) =>
-    projectMatchesQuery(query, [
-      project.name,
-      project.code,
-      project.customer,
-      project.address,
-      project.platform,
-      project.owner,
-      project.nextActionOwnerName,
-      project.designer,
-      ...project.tags,
-    ]),
+    projectMatchesQuery(query, searchableFields(project)),
   )
   const groupedProjects = groupProjectWorkbenchProjects(
     filteredProjects.map((project) => ({
@@ -288,6 +278,22 @@ export function ProjectFlow() {
       waitingOn: project.waitingOn ?? "none",
     })),
   )
+  // 一屏一个入口：搜索交给表格自带的那一个筛选框，行按优先级顺序排列，不再一个分组一张表。
+  const orderedProjects = [
+    ...groupedProjects.risk,
+    ...groupedProjects.upcoming,
+    ...groupedProjects.waiting,
+    ...groupedProjects.active,
+  ]
+  const upcomingProjectIds = new Set(groupedProjects.upcoming.map((project) => project.id))
+  const columns = buildProjectColumns((project) => upcomingProjectIds.has(project.id))
+  // 0 值不占位：统计行只显示真正有数的项目。
+  const statItems = [
+    { label: text.total, value: projects.length },
+    { label: text.risks, value: groupedProjects.risk.length, tone: "warn" as const },
+    { label: text.upcoming, value: groupedProjects.upcoming.length },
+    { label: text.waiting, value: groupedProjects.waiting.length },
+  ].filter((item) => item.value > 0)
 
   async function createProject(formData: FormData) {
     const input = Object.fromEntries(formData.entries())
@@ -338,66 +344,60 @@ export function ProjectFlow() {
         />}
       />
 
-      <StatStrip
-        items={[
-          { label: text.total, value: projects.length },
-          { label: text.risks, value: groupedProjects.risk.length, tone: groupedProjects.risk.length > 0 ? "warn" : "default" },
-          { label: text.upcoming, value: groupedProjects.upcoming.length },
-          { label: text.waiting, value: groupedProjects.waiting.length },
-        ]}
-      />
+      {statItems.length ? <StatStrip items={statItems} /> : null}
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <ClipboardList className="size-4" />
-                {text.workbench}
-              </CardTitle>
-            </div>
-            <ProjectSearchInput
-              value={query}
-              onChange={setQuery}
-              placeholder={text.search}
-              size="md"
-            />
+      {isLoadingProjects ? (
+        <div role="status" className="flex items-center gap-2 rounded-lg border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          {projects.length ? "正在更新项目列表，已显示的项目仍可查看。" : "正在读取项目列表…"}
+        </div>
+      ) : projectLoadError ? (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
+          <div className="space-y-1 text-sm">
+            <p className="text-destructive-strong">{projectLoadError}</p>
+            <p className="text-muted-foreground">{projects.length ? "已显示的项目保留，可重试更新列表。" : "尚未取得项目资料，读取失败不表示没有项目。"}</p>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {isLoadingProjects ? (
-            <div role="status" className="flex items-center gap-2 rounded-lg border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              {projects.length ? "正在更新项目列表，已显示的项目仍可查看。" : "正在读取项目列表…"}
-            </div>
-          ) : projectLoadError ? (
-            <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
-              <div className="space-y-1 text-sm">
-                <p className="text-destructive">{projectLoadError}</p>
-                <p className="text-muted-foreground">{projects.length ? "已显示的项目保留，可重试更新列表。" : "尚未取得项目资料，读取失败不表示没有项目。"}</p>
-              </div>
-              <Button type="button" size="sm" variant="outline" onClick={() => setProjectLoadAttempt((attempt) => attempt + 1)}>
-                <RefreshCw className="size-4" />
-                重试读取
-              </Button>
-            </div>
-          ) : null}
-          {filteredProjects.length > 0 ? (
-            <>
-              <ProjectGroup title="阻塞/风险项目" projects={groupedProjects.risk} />
-              <ProjectGroup title="今天或近期到期" projects={groupedProjects.upcoming} />
-              <ProjectGroup title="等待中" projects={groupedProjects.waiting} />
-              <ProjectGroup title="普通进行中" projects={groupedProjects.active} />
-            </>
-          ) : !isLoadingProjects && !projectLoadError ? (
-            <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-              {projects.length ? text.empty : "还没有项目，可点击“新建项目”开始。"}
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
+          <Button type="button" size="sm" variant="outline" onClick={() => setProjectLoadAttempt((attempt) => attempt + 1)}>
+            <RefreshCw className="size-4" />
+            重试读取
+          </Button>
+        </div>
+      ) : null}
+
+      {orderedProjects.length ? (
+        <AdminDataTable
+          columns={columns}
+          data={orderedProjects}
+          emptyText={text.empty}
+          getRowId={(project) => project.id}
+          globalFilter={query}
+          globalFilterFn={(project, value) => projectMatchesQuery(value, searchableFields(project))}
+          onGlobalFilterChange={setQuery}
+          onRowClick={(project) => router.push(`/projects/${encodeURIComponent(project.id)}`)}
+          searchPlaceholder={text.search}
+        />
+      ) : !isLoadingProjects && !projectLoadError ? (
+        <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+          {projects.length ? text.empty : "还没有项目，可点击“新建项目”开始。"}
+        </div>
+      ) : null}
     </section>
   )
+}
+
+/** 列表一个搜索框能匹配的字段；页面筛选与表格筛选共用一份，避免两处口径不同。 */
+function searchableFields(project: Project) {
+  return [
+    project.name,
+    project.code,
+    project.customer,
+    project.address,
+    project.platform,
+    project.owner,
+    project.nextActionOwnerName,
+    project.designer,
+    ...project.tags,
+  ]
 }
 
 function CreateProjectDialog({
@@ -446,7 +446,7 @@ function CreateProjectDialog({
         </DialogHeader>
         <form action={onCreate} className="grid gap-4">
           {error ? (
-            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive-strong">
               {error}
             </div>
           ) : null}
@@ -675,116 +675,92 @@ function getProjectCreateErrorMessage(reason: string | undefined) {
   return "项目暂时未能保存到服务器"
 }
 
-function ProjectGroup({
-  projects,
-  title,
-}: {
-  projects: Project[]
-  title: string
-}) {
-  const router = useRouter()
+/**
+ * 列表列：项目名带风险徽标，客户列在没填客户名时直接显示地址（不留空行也不写「-」），
+ * 状态列合并阶段、阶段状态、等待对象与「近期到期」，每一行都能看出这个项目卡在哪。
+ */
+function buildProjectColumns(isDueSoon: (project: Project) => boolean): ColumnDef<Project>[] {
+  return [
+    {
+      accessorKey: "name",
+      header: "项目",
+      cell: ({ row }) => {
+        const project = row.original
 
-  if (projects.length === 0) {
-    return null
-  }
-
-  return (
-    <section className="space-y-2">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold">{title}</h2>
-        <Badge variant="outline">{projects.length} 个项目</Badge>
-      </div>
-      <AdminDataTable
-        columns={projectColumns}
-        data={projects}
-        emptyText={text.empty}
-        getRowId={(project) => project.id}
-        globalFilterFn={(project, value) =>
-          [project.name, project.code, project.customer, project.address, project.nextAction]
-            .join(" ")
-            .toLowerCase()
-            .includes(value.toLowerCase())
-        }
-        onRowClick={(project) => router.push(`/projects/${encodeURIComponent(project.id)}`)}
-        searchPlaceholder="筛选项目..."
-      />
-    </section>
-  )
-}
-
-const projectColumns: ColumnDef<Project>[] = [
-  {
-    accessorKey: "name",
-    header: "项目",
-    cell: ({ row }) => {
-      const project = row.original
-
-      return (
-        <div className="min-w-56">
-          <div className="flex flex-wrap items-center gap-2">
+        return (
+          <div className="flex min-w-56 flex-wrap items-center gap-2">
             <span className="truncate font-medium">{project.name}</span>
             <RiskBadge risk={project.riskLevel ?? project.risk} />
           </div>
-        </div>
-      )
+        )
+      },
     },
-  },
-  {
-    accessorKey: "customer",
-    header: "客户",
-    cell: ({ row }) => (
-      <div className="min-w-44">
-        <div className="truncate">{row.original.customer || "-"}</div>
-        <div className="mt-1 truncate text-xs text-muted-foreground">{row.original.address || "-"}</div>
-      </div>
-    ),
-  },
-  {
-    accessorKey: "owner",
-    header: "负责人",
-    cell: ({ row }) => (
-      <div className="min-w-36">
-        <div className="truncate">{row.original.owner || "-"}</div>
-        {row.original.nextActionOwnerName && row.original.nextActionOwnerName !== row.original.owner ? (
-          <div className="mt-1 truncate text-xs text-muted-foreground">{row.original.nextActionOwnerName}</div>
-        ) : null}
-      </div>
-    ),
-  },
-  {
-    accessorKey: "stage",
-    header: "状态",
-    cell: ({ row }) => {
-      const stageLabel = getStage(row.original.stage).label
-      const statusLabel = row.original.stageStatusLabel?.trim()
+    {
+      accessorKey: "customer",
+      header: "客户 / 位置",
+      cell: ({ row }) => {
+        const project = row.original
+        const primary = project.customer.trim() || project.address.trim()
 
-      return (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Badge variant="outline">{stageLabel}</Badge>
-          {/* 阶段名与状态名经常是同一句话，重复时不显示第二个徽标。 */}
-          {statusLabel && statusLabel !== stageLabel ? <Badge variant="secondary">{statusLabel}</Badge> : null}
-          {/* 「未等待」是默认值，不占位。 */}
-          {row.original.waitingOn && row.original.waitingOn !== "none" ? (
-            <Badge variant="secondary">{waitingOnLabel(row.original.waitingOn)}</Badge>
-          ) : null}
-        </div>
-      )
+        return (
+          <div className="min-w-44">
+            {primary ? <div className="truncate">{primary}</div> : null}
+            {project.customer.trim() && project.address.trim() ? (
+              <div className="mt-1 truncate text-xs text-muted-foreground">{project.address}</div>
+            ) : null}
+          </div>
+        )
+      },
     },
-  },
-  {
-    accessorKey: "createdAt",
-    header: "创建时间",
-    cell: ({ row }) => (
-      <div className="text-right text-muted-foreground">{formatProjectDate(row.original.createdAt)}</div>
-    ),
-  },
-  {
-    id: "actions",
-    header: "",
-    enableHiding: false,
-    cell: ({ row }) => <ProjectRowActions project={row.original} />,
-  },
-]
+    {
+      accessorKey: "owner",
+      header: "负责人",
+      cell: ({ row }) => {
+        const project = row.original
+        const primary = project.owner.trim() || project.nextActionOwnerName?.trim() || ""
+
+        return (
+          <div className="min-w-36">
+            {primary ? <div className="truncate">{primary}</div> : null}
+            {project.nextActionOwnerName && project.nextActionOwnerName !== project.owner ? (
+              <div className="mt-1 truncate text-xs text-muted-foreground">下一步 {project.nextActionOwnerName}</div>
+            ) : null}
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: "stage",
+      header: "状态",
+      cell: ({ row }) => {
+        const stageLabel = getStage(row.original.stage).label
+        const statusLabel = row.original.stageStatusLabel?.trim()
+
+        return (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge variant="outline">{stageLabel}</Badge>
+            {/* 阶段名与状态名经常是同一句话，重复时不显示第二个徽标。 */}
+            {statusLabel && statusLabel !== stageLabel ? <Badge variant="secondary">{statusLabel}</Badge> : null}
+            {/* 「未等待」是默认值，不占位。 */}
+            {row.original.waitingOn && row.original.waitingOn !== "none" ? (
+              <Badge variant="secondary">{waitingOnLabel(row.original.waitingOn)}</Badge>
+            ) : null}
+            {/* 只有真的临近到期才占位，日期跟着徽标一起看。 */}
+            {isDueSoon(row.original) ? (
+              <Badge variant="outline">近期到期 {formatProjectDate(row.original.nextActionDueAt)}</Badge>
+            ) : null}
+          </div>
+        )
+      },
+    },
+    {
+      id: "actions",
+      header: "",
+      enableHiding: false,
+      cell: ({ row }) => <ProjectRowActions project={row.original} />,
+    },
+  ]
+}
 
 function ProjectRowActions({ project }: { project: Project }) {
   return (
@@ -840,7 +816,8 @@ function RiskBadge({ risk }: { risk: Risk }) {
 
   if (risk === "watch") return <Badge variant="secondary">{text.watch}</Badge>
 
-  return <Badge variant="outline">{text.normal}</Badge>
+  // 「正常」是每个项目的默认值，没有任何信息量，不占位。
+  return null
 }
 
 function waitingOnLabel(waitingOn: Project["waitingOn"]) {

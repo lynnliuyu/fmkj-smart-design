@@ -1,0 +1,18 @@
+[Unit]
+Description=FMKJ 设备版：母盘第一次开机初始化（生成新密钥、重建数据库）
+Documentation=file:/opt/fmkj/app/docs/local-appliance-deployment.md
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+# 更新管家要等这一步把库建好再开始轮询。
+Before=fmkj-updater.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# 没有「首次开机标记」时脚本自己会立刻退出，所以正常安装的设备上它什么都不做。
+ExecStart=/bin/bash /opt/fmkj/app/scripts/deploy/first-boot.sh
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target

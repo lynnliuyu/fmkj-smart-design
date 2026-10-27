@@ -1,0 +1,11 @@
+[Unit]
+Description=FMKJ 设备版：每天检查一次新版本（只提醒，不自动安装）
+
+[Timer]
+OnCalendar=*-*-* 04:20:00
+RandomizedDelaySec=30m
+Persistent=true
+Unit=fmkj-update-check.service
+
+[Install]
+WantedBy=timers.target

@@ -50,6 +50,17 @@ describe("point procurement preview", () => {
     expect(second.points[0].selection?.mappingRevision).toBe(2)
     expect(buildProcurementPreview(second, 9, [{ ...product, mappingRevision: 3 }], "Synthetic").blocked).toBe(true)
   })
+  it("lists the rooms the point map actually uses, without duplicating a floor prefix", () => {
+    const points: PointMapNode[] = [
+      { ...point, id: "a", room: "Living" },
+      { ...point, id: "b", room: "一楼 / Living" }, // 存量数据：房间名里已经带了楼层
+      { ...point, id: "c", room: "Kitchen", floorId: "ground" },
+      { ...point, id: "d", room: "", floorId: "ground" },
+    ]
+    const rooms = buildProcurementPreview(plan(points), 10, [product], "Synthetic").data.rooms
+    // 「一楼 / Living」不重复拼楼层；没前缀的 Kitchen 补上楼层；空房间丢掉。
+    expect(rooms).toEqual(["一楼 / Living", "一楼 / Kitchen"])
+  })
   it("creates a server snapshot for an explicit compatible selection and ignores forged identity", async () => {
     const raw = { id: ID, name: product.name, sku: product.sku, unit: product.unit, category: "开关", status: "active", created_at: new Date(), updated_at: new Date(), catalog_kind: "sku", device_type_id: "wall-switch", specs: product.specs, protocols: [], capabilities: [], selection_status: "verified", selection_evidence: "Synthetic evidence", pricing_status: "verified", pricing_evidence: "Synthetic price", mapping_revision: 2 }
     const client = { query: async () => ({ rows: [raw] }) } as never

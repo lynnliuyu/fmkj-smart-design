@@ -14,15 +14,43 @@ const GUARD_IDENTIFIERS = [
   "requireAccountPermission",
 ] as const
 
-// Identity from the middleware header is enough for endpoints that only write
-// storage, but not for anything that reads or mutates project records. Each
-// exception has to say why.
-const IDENTITY_ONLY_WRITES: Record<string, string> = {
-  "app/api/upload/route.ts":
-    "writes blobs under the session user's own prefix; neither reads nor mutates project rows",
-}
+// Kept as an empty registry on purpose: an exception here is a promise that the
+// route cannot touch another account's data. `/api/upload` used to live here and
+// now resolves the account context itself, so it is guarded like every other route.
+const IDENTITY_ONLY_WRITES: Record<string, string> = {}
 
 const IDENTITY_IDENTIFIER = "getAuthenticatedUserId"
+
+// Endpoints called by something that is not a browser session (a subscriber
+// device, a deployment script). They cannot use the session cookie, so they must
+// verify a bearer credential themselves — which this test checks, not just trusts.
+const TOKEN_AUTHENTICATED: Record<string, string> = {
+  "app/api/catalog/snapshot/route.ts":
+    "pulled by subscriber devices: verifies Bearer CATALOG_PUBLISH_TOKEN and answers 404 when no token is configured",
+  "app/api/catalog/asset/route.ts":
+    "pulled by subscriber devices for catalog images: same Bearer check, plus path containment under public/ and an image extension allowlist",
+}
+
+/**
+ * A token-guarded route has to actually compare a bearer credential, not just claim to.
+ *
+ * 允许两种写法：路由自己比较，或**委托给统一的凭据校验模块**（lib/catalog-auth.ts）。
+ * 后者是更好的设计（两个取资料入口共用一套守卫，不会改一处漏一处），但要求：
+ *   - 路由确实调用了那个校验函数；
+ *   - 被委托的模块自己做常量时间比较、也返回 401。
+ */
+const CATALOG_AUTH_MODULE = join("lib", "catalog-auth.ts")
+
+function comparesBearer(source: string) {
+  return /authorization/i.test(source) && /Bearer/i.test(source) && /401/.test(source) && /timingSafeEqual|safeEqual|!==\s*expected|===\s*expected/.test(source)
+}
+
+function verifiesBearerToken(source: string) {
+  if (comparesBearer(source)) return true
+  if (!/authorizeCatalogRequest\s*\(/.test(source)) return false
+  const helper = readFileSync(join(process.cwd(), CATALOG_AUTH_MODULE), "utf8")
+  return /authorizeCatalogRequest/.test(helper) && /Bearer/i.test(helper) && /401/.test(helper) && /safeEqual|timingSafeEqual/.test(helper)
+}
 
 // Login, sign-up, password reset and verification codes must work before a
 // session exists. Nothing outside this prefix may skip a guard.
@@ -169,10 +197,21 @@ describe("API authorization surface", () => {
       if (!exportedMethods(source).includes("GET")) continue
 
       const { guards } = guardsFor(file)
-      if (guards.length === 0) unguarded.push(normalized)
+      if (guards.length === 0) {
+        if (TOKEN_AUTHENTICATED[normalized] && verifiesBearerToken(source)) continue
+        unguarded.push(normalized)
+      }
     }
 
     expect(unguarded, `unauthorized reads:\n${unguarded.join("\n")}`).toEqual([])
+  })
+
+  it("does not keep stale token exceptions, and each one really checks a bearer token", () => {
+    for (const [file, reason] of Object.entries(TOKEN_AUTHENTICATED)) {
+      expect(files, file).toContain(file)
+      expect(reason.length, file).toBeGreaterThan(20)
+      expect(verifiesBearerToken(readFileSync(join(process.cwd(), file), "utf8")), file).toBe(true)
+    }
   })
 
   it("scopes attachments to projects the account can see", () => {

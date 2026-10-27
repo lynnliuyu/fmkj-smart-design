@@ -10,6 +10,8 @@ import {
 } from "@/lib/product-admin-service"
 import { productSelectionWithDefaults, type ProductSelectionFields } from "@/lib/product-selection"
 import { normalizeProductCategory } from "@/lib/product-categories"
+import { getCurrentAccountContext } from "@/lib/account-context"
+import { canViewProductCost, stripProductCost } from "@/lib/product-cost"
 import { getPool, hasDatabaseUrl } from "@/lib/server-db"
 import { loadProductVisualAssets } from "@/lib/product-visual-assets-service"
 
@@ -39,11 +41,20 @@ type ProductsResponse = {
 }
 
 export async function GET() {
+  // 成本只给经营者看：企业里的编辑/查看者拿不到，界面上显示「仅管理者可见」。
+  // 报价保存时服务端会用目录成本兜底，所以不影响毛利统计。
+  const showCost = canViewProductCost(await getCurrentAccountContext())
   if (hasDatabaseUrl()) {
-    return getProductsFromPostgres()
+    return getProductsFromPostgres(showCost)
   }
 
-  return getProductsFromHttpApi()
+  return getProductsFromHttpApi(showCost)
+}
+
+/** 统一的出参形状：先补默认值，再按权限决定要不要带成本。 */
+function shapeProduct(product: ApiProduct, showCost: boolean) {
+  const normalized = normalizeApiProduct(product)
+  return showCost ? normalized : stripProductCost(normalized)
 }
 
 export async function POST(request: NextRequest) {
@@ -63,6 +74,8 @@ export async function POST(request: NextRequest) {
       image: optionalString(body.image),
       name: String(body.name ?? ""),
       platform: optionalString(body.platform),
+      series: optionalString(body.series),
+      platforms: Array.isArray(body.platforms) ? body.platforms.map(String) : undefined,
       price: Number(body.price ?? 0),
       sku: String(body.sku ?? ""),
       status: "active",
@@ -88,7 +101,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function getProductsFromPostgres() {
+async function getProductsFromPostgres(showCost: boolean) {
   try {
     const productsTable = quoteIdentifier(process.env.PRODUCTS_TABLE ?? "products")
     const productsLimit = Number(process.env.PRODUCTS_LIMIT ?? 2000)
@@ -133,19 +146,20 @@ async function getProductsFromPostgres() {
 
     const visuals = await loadProductVisualAssets(getPool(), result.rows.map((product) => product.id))
     return NextResponse.json({
-      data: result.rows.map((product) => ({ ...normalizeApiProduct(product), visualAsset: visuals.get(product.id) ?? null })),
+      data: result.rows.map((product) => ({ ...shapeProduct(product, showCost), visualAsset: visuals.get(product.id) ?? null })),
       source: "postgres",
       total: totalResult.rows[0]?.count ?? result.rowCount,
     })
   } catch (error) {
     return fallbackResponse(
       error instanceof Error ? error.message : "POSTGRES_PRODUCTS_UNAVAILABLE",
-      "postgres-fallback"
+      "postgres-fallback",
+      showCost
     )
   }
 }
 
-async function getProductsFromHttpApi() {
+async function getProductsFromHttpApi(showCost: boolean) {
   const baseUrl =
     process.env.FMKJ_API_BASE_URL ??
     process.env.NEXT_PUBLIC_API_BASE_URL ??
@@ -161,20 +175,21 @@ async function getProductsFromHttpApi() {
     })
 
     if (!response.ok) {
-      return fallbackResponse(`PRODUCT_API_${response.status}`, "database-api-fallback")
+      return fallbackResponse(`PRODUCT_API_${response.status}`, "database-api-fallback", showCost)
     }
 
     const payload = (await response.json()) as ProductsResponse
 
     return NextResponse.json({
-      data: (payload.data ?? []).map(normalizeApiProduct),
+      data: (payload.data ?? []).map((product) => shapeProduct(product, showCost)),
       source: "database-api",
       total: payload.pagination?.total ?? payload.data?.length ?? 0,
     })
   } catch (error) {
     return fallbackResponse(
       error instanceof Error ? error.message : "PRODUCT_API_UNAVAILABLE",
-      "http-api-fallback"
+      "http-api-fallback",
+      showCost
     )
   }
 }
@@ -186,9 +201,9 @@ function quoteIdentifier(identifier: string) {
     .join(".")
 }
 
-function fallbackResponse(error: string, source: string) {
+function fallbackResponse(error: string, source: string, showCost: boolean) {
   return NextResponse.json({
-    data: fallbackProducts.map(normalizeApiProduct),
+    data: fallbackProducts.map((product) => shapeProduct(product, showCost)),
     error,
     source,
     total: fallbackProducts.length,

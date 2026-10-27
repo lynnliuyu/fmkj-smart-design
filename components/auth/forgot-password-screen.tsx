@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { ArrowLeft, ArrowRight, Check, Mail, ShieldCheck } from "lucide-react"
+import { ArrowLeft, ArrowRight, Check, ShieldCheck } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -114,16 +114,16 @@ export function ForgotPasswordScreen() {
           <div className="flex size-9 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <ShieldCheck className="size-5" />
           </div>
-          <span className="text-xl font-medium">FMKJ Admin</span>
+          <span className="text-xl font-medium">FMKJ</span>
         </div>
 
         {success ? (
           <Card>
             <CardHeader className="text-center">
-              <div className="mx-auto mb-2 flex size-11 items-center justify-center rounded-md bg-emerald-100">
-                <Check className="size-5 text-emerald-600" />
-              </div>
-              <CardTitle>密码已重置</CardTitle>
+              <CardTitle className="flex items-center justify-center gap-2">
+                <Check className="size-4 text-success" />
+                密码已重置
+              </CardTitle>
               <CardDescription>
                 请使用新密码登录您的账号。
               </CardDescription>
@@ -137,9 +137,6 @@ export function ForgotPasswordScreen() {
         ) : (
           <Card>
             <CardHeader className="text-center">
-              <div className="mx-auto mb-2 flex size-11 items-center justify-center rounded-md bg-muted">
-                <Mail className="size-5 text-muted-foreground" />
-              </div>
               <CardTitle>找回密码</CardTitle>
               <CardDescription>
                 {step === "enter-target"
@@ -149,7 +146,7 @@ export function ForgotPasswordScreen() {
             </CardHeader>
             <CardContent>
               {error && (
-                <div className="mb-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                <div className="mb-4 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive-strong">
                   {error}
                 </div>
               )}

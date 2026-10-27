@@ -1,6 +1,8 @@
 "use client"
 
 import * as React from "react"
+
+import { sumMoney } from "@/lib/money"
 import type { QuoteImageRefreshResult } from "@/lib/quote-image-refresh"
 import { pointIdsRemovedByLines, syncLocalPointDraft } from "@/lib/point-map-quote-removal"
 import { pointMapLocalStore } from "@/lib/point-map-local-store"
@@ -49,7 +51,7 @@ type QuoteEditorDraft = {
 }
 
 function emptyEditorDraft(projectKey: string): QuoteEditorDraft {
-  return { projectKey, pendingPointRemovals: [], pendingPointRoomMoves: [], items: [], rooms: quoteRooms, installationFee: 0, dirty: false, revision: 0, feeEdited: false, roomsEdited: false, roomChanges: [] }
+  return { projectKey, pendingPointRemovals: [], pendingPointRoomMoves: [], items: [], rooms: [], installationFee: 0, dirty: false, revision: 0, feeEdited: false, roomsEdited: false, roomChanges: [] }
 }
 
 export function useQuoteAuthoring({ requestedProjectId }: { requestedProjectId: string | null }) {
@@ -69,7 +71,7 @@ export function useQuoteAuthoring({ requestedProjectId }: { requestedProjectId: 
   const [status, setStatus] = React.useState("草稿")
   const [saveState, setSaveState] = React.useState<"idle" | "saving" | "saved" | "error">("idle")
   const [isUploadingPdf, setIsUploadingPdf] = React.useState(false)
-  const [rooms, setRooms] = React.useState<string[]>(quoteRooms)
+  const [rooms, setRooms] = React.useState<string[]>([])
   const [installationFee, setInstallationFeeValue] = React.useState(0)
   const [items, setItems] = React.useState<QuoteLineItem[]>([])
   const [isLoadingQuote, setIsLoadingQuote] = React.useState(true)
@@ -88,7 +90,7 @@ export function useQuoteAuthoring({ requestedProjectId }: { requestedProjectId: 
   const quoteProducts = databaseProducts?.length ? databaseProducts : fallbackProducts
   const productCategories = unique(quoteProducts.map((item) => item.category))
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const productsPayableTotal = items.reduce((sum, item) => sum + lineTotal(item), 0)
+  const productsPayableTotal = sumMoney(items.map((item) => lineTotal(item)))
   const payableTotal = productsPayableTotal + installationFee
   const discountTotal = subtotal - productsPayableTotal
   const groups = groupQuoteItems(items, groupMode, productCategories, rooms)
@@ -206,8 +208,17 @@ export function useQuoteAuthoring({ requestedProjectId }: { requestedProjectId: 
         pointMapSnapshot: snapshot,
         roomChanges: current.roomChanges,
       })
+      // 房间只有一份出处：点位图。点位图的房间永远是第一优先，老报价草稿里存的那份作废
+      //（以前保存时会把模板房间和点位图房间并在一起存，那些存量数据是脏的）。
+      // 只有点位图完全没有房间时，才退回本机编辑中的/老草稿的/模板。
       const savedRooms = savedDraft?.rooms?.filter(Boolean) ?? []
-      const baseRooms = baseline.dirty || current.roomsEdited ? current.rooms : savedRooms.length ? savedRooms : quoteRooms
+      const baseRooms = snapshot?.rooms?.length
+        ? snapshot.rooms
+        : current.roomsEdited && current.rooms.length
+          ? current.rooms
+          : savedRooms.length
+            ? savedRooms
+            : quoteRooms
       const nextRooms = unique([...baseRooms, ...nextItems.map((item) => item.room)])
       const fee = baseline.dirty || current.feeEdited || !savedDraft ? current.installationFee : Number(savedDraft.installationFee ?? 0)
       const dirty = current.dirty || draftItems.length > 0 || snapshot !== null
@@ -376,7 +387,7 @@ export function useQuoteAuthoring({ requestedProjectId }: { requestedProjectId: 
       if (editorRef.current.projectKey !== projectKey || projectSelectionRevisionRef.current !== selectionRevision) return false
       const editor = editorRef.current
       const savedSubtotal = editor.items.reduce((sum, item) => sum + item.price * item.quantity, 0)
-      const savedProductsTotal = editor.items.reduce((sum, item) => sum + lineTotal(item), 0)
+      const savedProductsTotal = sumMoney(editor.items.map((item) => lineTotal(item)))
       const response = await fetch("/api/quotes", {
         body: JSON.stringify({
           refreshProductImages,

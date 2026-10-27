@@ -1,6 +1,8 @@
 import type { Pool, PoolClient } from "pg"
 
 import { secondsBetween, tryRecordActivity } from "./server-activity-log"
+import { canViewProductCost } from "./product-cost"
+import { lineAmount, roundMoney, sumMoney } from "./money"
 import { getPool } from "./server-db"
 import { buildStoredProcurementPreview } from "./point-map-procurement-service"
 import { loadSelectionProducts } from "./point-map-selection-service"
@@ -20,7 +22,8 @@ export type QuoteItemPayload = {
   unit: string
   quantity: number
   price: number
-  cost: number
+  /** An omitted cost means the caller did not receive internal cost data; explicit 0 is a real value. */
+  cost?: number | null
   discount: number
   pointMapProjectId?: string
   pointIds?: string[]
@@ -110,22 +113,19 @@ async function saveQuoteDraftInTransaction(
   let validItems = items.filter((item) => isUuid(item.productId))
   const removedPointIds = Array.isArray(input.removedPointIds) ? input.removedPointIds.map(String).filter(Boolean) : []
   const installationFee = Number(input.installationFee ?? 0)
-  if (!Number.isFinite(installationFee) || installationFee < 0 || validItems.some((item) => !Number.isFinite(item.quantity) || item.quantity <= 0 || !Number.isFinite(item.price) || item.price < 0 || !Number.isFinite(item.cost) || item.cost < 0 || !Number.isFinite(item.discount) || item.discount < 0 || item.discount > 100)) throw new QuoteSaveError("报价数量或金额无效", 400)
-  const subtotal = validItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const payable = validItems.reduce((sum, item) => sum + item.price * item.quantity * item.discount / 100, 0)
-  const discount = subtotal - payable
-  const total = payable + installationFee
+  const invalidCost = (item: QuoteItemPayload) => item.cost !== undefined && item.cost !== null && (!Number.isFinite(item.cost) || item.cost < 0)
+  if (!Number.isFinite(installationFee) || installationFee < 0 || validItems.some((item) => !Number.isFinite(item.quantity) || item.quantity <= 0 || !Number.isFinite(item.price) || item.price < 0 || invalidCost(item) || !Number.isFinite(item.discount) || item.discount < 0 || item.discount > 100)) throw new QuoteSaveError("报价数量或金额无效", 400)
+  // 金额一律按“分”的整数计算，避免 99.99999999999999 这类浮点尾巴进库或进报价单。
+  const subtotal = sumMoney(validItems.map((item) => lineAmount(item.price, item.quantity)))
+  const payable = sumMoney(validItems.map((item) => lineAmount(item.price, item.quantity, item.discount)))
+  const discount = roundMoney(subtotal - payable)
+  const total = roundMoney(payable + installationFee)
   const rooms = Array.isArray(input.rooms)
     ? input.rooms.map((room) => String(room).trim()).filter(Boolean)
     : []
   const note = JSON.stringify({ installationFee, rooms })
   const actorUserId = dependencies.actorUserId ?? SYSTEM_USER_ID
   const actorName = dependencies.actorName ?? SYSTEM_ACTOR_NAME
-  const cost = validItems.reduce(
-    (sum, item) => sum + Number(item.cost || 0) * Number(item.quantity || 0),
-    0,
-  )
-
   const project = await client.query<{
     createdAt: Date
     id: string
@@ -220,8 +220,8 @@ async function saveQuoteDraftInTransaction(
       expected.delete(key)
     }
   }
-  const existingSnapshots = existingQuote.rows[0] ? await client.query<{ product_id: string; room: string; product_snapshot: Record<string, unknown> | null }>(
-    `select product_id::text, room, product_snapshot from quote_items where quote_id=$1::uuid and deleted_at is null`, [existingQuote.rows[0].id],
+  const existingSnapshots = existingQuote.rows[0] ? await client.query<{ product_id: string; room: string; cost_price: number | null; product_snapshot: Record<string, unknown> | null }>(
+    `select product_id::text, room, cost_price::float8, product_snapshot from quote_items where quote_id=$1::uuid and deleted_at is null`, [existingQuote.rows[0].id],
   ) : { rows: [] }
   const previousSnapshotFor = (item: QuoteItemPayload) => {
     const matches = existingSnapshots.rows.filter((row) => row.product_id === item.productId && row.product_snapshot)
@@ -233,6 +233,31 @@ async function saveQuoteDraftInTransaction(
     return undefined
   }
   const catalog = new Map((await loadSelectionProducts(client, items.map((item) => item.productId))).map((product) => [product.id, product]))
+  // 客户端可能看不到进货成本（企业里的编辑/查看者），保存时用目录里的成本兜底：
+  // 否则普通销售保存的报价成本记成 0，管理者看到的毛利就全错了。
+  const catalogCost = new Map<string, number>(
+    (await client.query<{ cost: number; id: string }>(
+      `select id::text as id, coalesce(cost, 0)::float8 as cost from products where id = any($1::uuid[])`,
+      [(items ?? []).map((item) => item.productId).filter((id) => isUuid(id))],
+    )).rows.map((row) => [row.id, Number(row.cost)]),
+  )
+  // 成本字段可能因为权限而被调用方省略；无权查看成本的账号提交的占位值也必须回退到目录成本。
+  // 有财务权限时，显式 0 代表该项目确认的零成本，不能再被真值判断改写成目录成本。
+  const trustSubmittedCost = !dependencies.context || canViewProductCost(dependencies.context)
+  const projectCosts = new Map((await client.query<{ product_id: string; cost_price: number | null }>(
+    `select product_id::text, cost_price::float8 from project_product_prices where project_id=$1::uuid and product_id=any($2::uuid[])`,
+    [resolvedProject.id, validItems.map((item) => item.productId)],
+  )).rows.filter((row) => row.cost_price !== null).map((row) => [row.product_id, Number(row.cost_price)]))
+  const storedCost = (item: QuoteItemPayload) => {
+    const previous = existingSnapshots.rows.filter((row) => row.product_id === item.productId)
+    const sameRoom = previous.filter((row) => row.room === item.room)
+    const saved = sameRoom.length === 1 ? sameRoom[0] : previous.length === 1 ? previous[0] : undefined
+    return saved?.cost_price ?? projectCosts.get(item.productId) ?? catalogCost.get(item.productId) ?? 0
+  }
+  const itemCost = (item: QuoteItemPayload) => roundMoney(trustSubmittedCost && item.cost !== undefined && item.cost !== null
+    ? Number(item.cost)
+    : Number(storedCost(item)))
+  const cost = sumMoney(validItems.map((item) => lineAmount(itemCost(item), item.quantity)))
   const isExistingQuote = Boolean(existingQuote.rows[0])
   const quoteNo = existingQuote.rows[0]?.quote_no ?? (dependencies.createQuoteNo ?? makeQuoteNo)()
   const quoteTitle = `${resolvedProject.name} \u62a5\u4ef7\u8349\u7a3f`
@@ -300,17 +325,18 @@ async function saveQuoteDraftInTransaction(
     if (item.pointMapProjectId && item.pointMapRevision !== previousSnapshot?.pointMapRevision) previousSnapshot = undefined
     const quantity = Number(item.quantity || 1)
     const unitPrice = Number(item.price || 0)
-    const finalUnitPrice = unitPrice * (Number(item.discount ?? 100) / 100)
-    const subtotalAmount = unitPrice * quantity
-    const finalAmount = finalUnitPrice * quantity
+    const finalUnitPrice = lineAmount(unitPrice, 1, Number(item.discount ?? 100))
+    const subtotalAmount = lineAmount(unitPrice, quantity)
+    const finalAmount = lineAmount(unitPrice, quantity, Number(item.discount ?? 100))
     const refreshedImage = input.refreshProductImages === true ? usableProductImage(catalog.get(item.productId)?.image) : undefined
+    const savedItemCost = itemCost(item)
     // 报价上手改的价格记为该项目对此商品的专属价格，之后同步报价时沿用。
     if (unitPrice > 0 && isUuid(item.productId)) {
       await client.query(
         `insert into project_product_prices (project_id, product_id, unit_price, cost_price, updated_by)
          values ($1::uuid, $2::uuid, $3, $4, $5)
          on conflict (project_id, product_id) do update set unit_price = excluded.unit_price, cost_price = excluded.cost_price, updated_at = now(), updated_by = excluded.updated_by`,
-        [resolvedProject.id, item.productId, unitPrice, Number(item.cost || 0), actorUserId],
+        [resolvedProject.id, item.productId, unitPrice, savedItemCost, actorUserId],
       )
     }
 
@@ -334,7 +360,7 @@ async function saveQuoteDraftInTransaction(
         item.name,
         item.unit,
         finalUnitPrice,
-        Number(item.cost || 0),
+        savedItemCost,
         subtotalAmount,
         finalAmount,
         item.spec,

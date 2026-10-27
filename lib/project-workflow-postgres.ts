@@ -1,5 +1,5 @@
 import type { AccountContext } from "./account-context"
-import { projectVisibilityWhere } from "./project-access"
+import { projectVisibilityWhere, type ProjectMembershipAccess } from "./project-access"
 import type {
   ProjectCreateRecordInput,
   ProjectRecord,
@@ -177,21 +177,25 @@ export class PostgresProjectWorkflowRepository implements ProjectWorkflowReposit
     )
   }
 
-  async canAccessProject(projectId: string, context: AccountContext) {
+  async getProjectAccess(projectId: string, context: AccountContext) {
     const visibility = projectVisibilityWhere(context, 1)
-    const result = await getPool().query<{ id: string }>(
+    const actorParameter = `$${visibility.params.length + 2}`
+    const result = await getPool().query<ProjectMembershipAccess>(
       `
-      select p.id::text
+      select p.created_by::text as "createdBy",
+        (select pm.access_level::text from project_members pm
+         where pm.project_id = p.id and pm.user_id = ${actorParameter}::uuid and pm.status = 'active'
+         limit 1) as "accessLevel"
       from projects p
       where p.id = $1::uuid
         and p.deleted_at is null
         and (${visibility.where})
       limit 1
       `,
-      [projectId, ...visibility.params]
+      [projectId, ...visibility.params, context.user.userId]
     )
 
-    return Boolean(result.rows[0])
+    return result.rows[0] ?? null
   }
 
   async getProjectForStageUpdate(projectId: string) {

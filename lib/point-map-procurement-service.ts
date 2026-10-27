@@ -4,8 +4,9 @@ import type { Pool } from "pg"
 import type { AccountContext } from "./account-context"
 import { assertPermission, assertWritableMembership, PointMapServiceError, requireContext, requireVisibleProject } from "./point-map-service"
 import { validateDesignPlan } from "./point-map-design"
-import { buildProcurementPreview, defaultButtonCountForPoint, defaultDeviceTypeForPoint, type PointMapProcurementPreview } from "./point-map-procurement"
+import { buildProcurementPreview, defaultButtonCountForPoint, defaultDeviceTypeForPoint, type PointMapProcurementPreview, type PointMapProcurementPreviewResponse } from "./point-map-procurement"
 import { loadCategoryDefaultProducts, loadSelectionProducts } from "./point-map-selection-service"
+import { canViewProductCost, stripSnapshotCosts } from "./product-cost"
 import { getPool } from "./server-db"
 import type { PointMapPlan } from "./point-map-plan"
 import type { SelectionClient } from "./point-map-selection-service"
@@ -35,7 +36,7 @@ export async function buildStoredProcurementPreview(client: SelectionClient, pro
   )
 }
 
-export async function previewPointMapProcurement(context: AccountContext | null, projectId: string, expectedRevision: unknown, db: Pick<Pool, "connect"> = getPool()) {
+export async function previewPointMapProcurement(context: AccountContext | null, projectId: string, expectedRevision: unknown, db: Pick<Pool, "connect"> = getPool()): Promise<PointMapProcurementPreviewResponse> {
   const account = requireContext(context, projectId)
   if (!Number.isSafeInteger(expectedRevision) || Number(expectedRevision) < 1) throw new PointMapServiceError("INVALID_POINT_MAP_REVISION", 400)
   const client = await db.connect()
@@ -47,7 +48,7 @@ export async function previewPointMapProcurement(context: AccountContext | null,
     assertWritableMembership(account, project)
     const result = await buildStoredProcurementPreview(client, projectId, Number(expectedRevision))
     await client.query("commit")
-    return result
+    return canViewProductCost(account) ? result : stripSnapshotCosts(result) as PointMapProcurementPreviewResponse
   } catch (error) {
     await client.query("rollback")
     throw error

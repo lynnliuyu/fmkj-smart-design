@@ -36,6 +36,13 @@ export type PointMapProcurementPreview = {
   procurementReady: boolean
 }
 
+/** 普通成员收到的报价预览保留售价和数量，进货成本只按财务权限提供。 */
+export type PointMapProcurementPreviewResponse = Omit<PointMapProcurementPreview, "data"> & {
+  data: Omit<PointMapQuoteSnapshot, "items"> & {
+    items: Array<Omit<QuoteDraftItem, "cost"> & { cost?: number }>
+  }
+}
+
 /** Missing selected items block the whole replacement, preserving the existing quote. */
 export function buildProcurementPreview(
   plan: PointMapPlan,
@@ -106,7 +113,8 @@ export function buildProcurementPreview(
     if (quotationVerification.status === "unverified") unverified.push({ pointId: point.id, code: point.code ?? point.id, reasons: quotationVerification.reasons })
     const snapshot = { ...(product!.productSnapshot ?? {}), quotationVerification }
     const floor = point.floorId ? floorById.get(point.floorId) : ""
-    const room = floor ? `${floor} / ${point.room}` : point.room
+    // 房间名里可能已经带楼层前缀（存量数据），别拼成「全屋 / 全屋 / 弱电箱」。
+    const room = floor && !point.room.startsWith(`${floor} / `) ? `${floor} / ${point.room}` : point.room
     const key = JSON.stringify([product!.id, room])
     const existing = groups.get(key)
     if (existing) {
@@ -140,7 +148,18 @@ export function buildProcurementPreview(
     }
   }
   return {
-    data: { projectId: plan.projectId, revision, items: [...groups.values()] },
+    data: {
+      projectId: plan.projectId,
+      revision,
+      items: [...groups.values()],
+      // 房间从点位方案本身来：楼层 + 点位的房间，去重。
+      rooms: Array.from(new Set(plan.points.map((point) => {
+        const floor = plan.floors?.find((entry) => entry.id === point.floorId)?.name
+        if (!point.room) return ""
+        // 房间名本身可能带楼层前缀，别拼成「全屋 / 全屋 / 弱电箱」。
+        return floor && !point.room.startsWith(`${floor} / `) ? `${floor} / ${point.room}` : point.room
+      }).filter(Boolean))),
+    },
     diagnostics, blocked: diagnostics.length > 0, included, excluded, unverified,
     procurementReady: diagnostics.length === 0 && unverified.length === 0,
   }

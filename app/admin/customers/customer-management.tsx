@@ -10,6 +10,7 @@ import type {
   PlatformCustomer,
   PlatformPlan,
 } from "@/lib/account-system/platform-admin-service"
+import { formatDateTime } from "@/lib/format-datetime"
 import {
   assignPlatformCustomerPlanClient,
   createPlatformCustomerClient,
@@ -428,7 +429,7 @@ function CustomerRow({
         </Select>
       </TableCell>
       <TableCell className="text-sm text-muted-foreground">
-        {customer.lastLoginAt ? new Date(customer.lastLoginAt).toLocaleString("zh-CN") : "从未登录"}
+        {customer.lastLoginAt ? formatDateTime(customer.lastLoginAt) : "从未登录"}
       </TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end">

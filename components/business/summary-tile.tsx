@@ -1,4 +1,5 @@
 import type * as React from "react"
+import Link from "next/link"
 
 import { cn } from "@/lib/utils"
 
@@ -52,23 +53,45 @@ export function StatStrip({
   items,
 }: {
   className?: string
-  items: Array<{ label: string; value: React.ReactNode; tone?: "default" | "warn" }>
+  items: Array<{
+    label: string
+    value: React.ReactNode
+    tone?: "default" | "warn"
+    /** 可选：统计项本身就是入口时给出目标地址，整块可点。 */
+    href?: string
+  }>
 }) {
   return (
     <div className={cn("flex flex-wrap items-center gap-x-5 gap-y-1 text-sm", className)}>
-      {items.map((item) => (
-        <span key={item.label} className="text-muted-foreground">
-          {item.label}{" "}
-          <span
-            className={cn(
-              "font-semibold tabular-nums text-foreground",
-              item.tone === "warn" && "text-destructive"
-            )}
+      {items.map((item) => {
+        const body = (
+          <>
+            {item.label}{" "}
+            <span
+              className={cn(
+                "font-semibold tabular-nums text-foreground",
+                item.tone === "warn" && "text-destructive"
+              )}
+            >
+              {item.value}
+            </span>
+          </>
+        )
+
+        return item.href ? (
+          <Link
+            key={item.label}
+            href={item.href}
+            className="rounded-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
           >
-            {item.value}
+            {body}
+          </Link>
+        ) : (
+          <span key={item.label} className="text-muted-foreground">
+            {body}
           </span>
-        </span>
-      ))}
+        )
+      })}
     </div>
   )
 }

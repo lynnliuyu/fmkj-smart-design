@@ -3,6 +3,7 @@ import { PlatformListCard } from "@/app/admin/_components/platform-list"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { formatDateTime } from "@/lib/format-datetime"
 
 const statusLabels = {
   canceled: "已取消",
@@ -59,7 +60,7 @@ export default async function AdminOrdersPage() {
                       {statusLabels[order.status]}
                     </Badge>
                   </TableCell>
-                  <TableCell>{new Date(order.createdAt).toLocaleString("zh-CN")}</TableCell>
+                  <TableCell>{formatDateTime(order.createdAt)}</TableCell>
                 </TableRow>
               ))}
               {!orders.length ? (

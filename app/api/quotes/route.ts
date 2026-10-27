@@ -4,6 +4,7 @@ import { QuoteSaveError, saveQuoteDraft } from "@/lib/quote-save";
 import { getCurrentAccountContext } from "@/lib/account-context";
 import { PointMapServiceError, assertPermission, assertWritableMembership, requireContext, requireVisibleProject } from "@/lib/point-map-service";
 import { pointMapApiErrorResponse } from "@/lib/point-map-api";
+import { canViewProductCost, stripSnapshotCosts } from "@/lib/product-cost";
 
 export async function GET(request: NextRequest) {
   try {
@@ -74,10 +75,22 @@ export async function GET(request: NextRequest) {
       [quote.rows[0].id],
     );
 
+    // 成本是经营者字段；普通成员仍可读取报价金额和明细，但不能从接口拿到进货价。
+    const publicItems = canViewProductCost(account)
+      ? items.rows
+      : items.rows.map((item) => stripSnapshotCosts(item))
+
+    // 房间只有一份出处：点位图。报价草稿里存的 rooms 是历史脏数据
+    //（以前保存时会把模板房间和点位图的房间并在一起存，越存越多）。
+    // 这里按点位方案现有的房间重算，前端拿到的就是唯一一份。
+    const pointMapRooms = await loadPointMapRooms(projectId);
+    const rooms = pointMapRooms.length ? pointMapRooms : quote.rows[0].rooms ?? [];
+
     return NextResponse.json({
       data: {
         ...quote.rows[0],
-        items: items.rows,
+        rooms,
+        items: publicItems,
       },
       source: "postgres",
     });
@@ -116,4 +129,28 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
+}
+
+/** 点位图里实际用到的房间（楼层 / 房间），按出现顺序去重。没有点位方案时返回空。 */
+async function loadPointMapRooms(projectId: string): Promise<string[]> {
+  const result = await getPool().query<{ plan: unknown }>(
+    `select plan from project_point_map_designs where project_id = $1::uuid`,
+    [projectId],
+  );
+  const plan = result.rows[0]?.plan as
+    | { floors?: Array<{ id: string; name: string }>; points?: Array<{ floorId?: string; room?: string }> }
+    | undefined;
+  if (!plan?.points) return [];
+  const floorName = new Map((plan.floors ?? []).map((floor) => [floor.id, floor.name]));
+  return Array.from(
+    new Set(
+      plan.points
+        .filter((point) => point.room)
+        .map((point) => {
+          const floor = point.floorId ? floorName.get(point.floorId) : undefined;
+          // 房间名里可能已经带楼层前缀（存量数据），别拼成「全屋 / 全屋 / 弱电箱」。
+          return floor && !point.room!.startsWith(`${floor} / `) ? `${floor} / ${point.room}` : point.room!;
+        }),
+    ),
+  );
 }

@@ -8,9 +8,7 @@ import {
   KeyRound,
   Loader2,
   Mail,
-  MessageCircle,
   ShieldCheck,
-  Smartphone,
   UserRound,
   UserRoundPlus,
 } from "lucide-react"
@@ -129,7 +127,7 @@ export function SignUpScreen({
               }}
             >
               {error && (
-                <div className="flex items-start gap-2 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                <div className="flex items-start gap-2 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive-strong">
                   <AlertCircle className="mt-0.5 size-4 shrink-0" />
                   <span>{error}</span>
                 </div>
@@ -201,28 +199,6 @@ export function SignUpScreen({
                 )}
               </Button>
             </form>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">
-                  其他注册方式
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Button type="button" variant="outline" className="h-10" disabled>
-                <Smartphone className="size-4" />
-                短信
-              </Button>
-              <Button type="button" variant="outline" className="h-10" disabled>
-                <MessageCircle className="size-4" />
-                微信
-              </Button>
-            </div>
 
             <p className="text-center text-sm text-muted-foreground">
               已有账户？{" "}

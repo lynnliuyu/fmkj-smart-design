@@ -106,6 +106,9 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-strong: var(--destructive-strong);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -143,10 +146,16 @@
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  /* 次要文字的对比度下限。0.556 在 --muted 底色上只有 4.35:1，实测 26 个页面共 92 处
+     不达标；0.53 在 --muted 上是 4.82:1、在白底上是 5.25:1，仍然是明确的次要层级。 */
+  --muted-foreground: oklch(0.53 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
+  /* 浅色警示底（--destructive/10）上的文字。直接用 --destructive 只有 4.0:1。 */
+  --destructive-strong: oklch(0.47 0.2 27.325);
+  --success: oklch(0.52 0.12 155);
+  --warning: oklch(0.52 0.11 75);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -182,6 +191,9 @@
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
+  --destructive-strong: oklch(0.78 0.15 22.216);
+  --success: oklch(0.74 0.12 155);
+  --warning: oklch(0.8 0.11 75);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
@@ -206,6 +218,29 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* 界面全是中文。Inter 只有拉丁字形，中文实际落到每台机器各自的默认字体上，
+     换台电脑行高和字宽就变。这里显式补齐中文字体链，保证同一份界面到哪都一样。 */
+  html {
+    font-family:
+      var(--font-sans),
+      "PingFang SC",
+      "Hiragino Sans GB",
+      "Microsoft YaHei",
+      "Noto Sans SC",
+      ui-sans-serif,
+      sans-serif;
+  }
+
+  /* 表格里的金额、数量、日期必须上下对齐；比例数字会让右对齐的列参差不齐。 */
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 选中态属于设计系统的一部分，浏览器默认的蓝色和这套中性色不搭。 */
+  ::selection {
+    background: oklch(0.62 0.02 250 / 28%);
   }
 
   body[data-density="compact"] {
@@ -237,6 +272,92 @@
   line-height: 1.4;
 }
 
+/* 品牌块里的联系方式与地址：比公司名小一号、灰一档，不抢主标题。 */
+.document-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.document-brand-text span {
+  color: #5a6374;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* 文档末尾的「联系我们」：左文字、右二维码；两样都没有时整块不渲染。 */
+.document-contact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-top: 1px solid #dfe3e8;
+  margin-top: 18px;
+  padding-top: 12px;
+}
+
+.document-contact strong {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.document-contact p {
+  color: #5a6374;
+  font-size: 11px;
+  line-height: 1.7;
+  margin: 2px 0 0;
+}
+
+.document-contact figure {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+
+.document-contact img {
+  height: 88px;
+  object-fit: contain;
+  width: 88px;
+}
+
+.document-contact figcaption {
+  color: #5a6374;
+  font-size: 10px;
+}
+
+/* 报价单：屏幕上只作打印预览的隐藏内容，样式按「现代简约」客户版式写在这里。
+   强调色用 scoped 变量，不碰 .project-presentation 与其它模块。 */
+.quote-document {
+  --doc-accent: #2c4a6b;
+  --doc-ink: #1c1c1c;
+  --doc-muted: #5b5b5b;
+  --doc-soft: #8a8a8a;
+  --doc-line: #e3e4e8;
+  --doc-line-strong: #c9ccd2;
+  --doc-bg1: #f7f7f8;
+  --doc-bg2: #f1f2f4;
+
+  color: var(--doc-ink);
+}
+
+.quote-document .quote-document-num,
+.quote-document .quote-document-total strong,
+.quote-document .quote-document-section-sum strong,
+.quote-document .quote-document-fee-total strong {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 报价明细的列名行与产品小图只在纸上出现；屏幕上不占位。
+   position 是给 next/image 的 fill 用的：这两行在屏幕下也是它的父元素，
+   不定位图片会相对更外层定位跑出格子，并刷控制台警告。@media print 里另有同名规则。 */
+.quote-document-cols,
+.quote-document-thumb {
+  display: none;
+  position: relative;
+}
+
 @media print {
   @page {
     margin: 10mm;
@@ -264,18 +385,35 @@
     display: block !important;
     position: absolute;
     inset: 0 auto auto 0;
-    width: 100%;
+    /* 必须收窄到 A4 可打印宽度（210mm 减左右各 10mm）。用 100% 会跟着浏览器窗口走，
+       窗口比纸宽时右侧被裁掉；固定毫米宽度在任意窗口宽度下都等于纸上宽度。 */
+    width: 190mm;
+    max-width: 190mm;
+    box-sizing: border-box;
     padding: 0 !important;
-    color: #111 !important;
+    color: var(--doc-ink) !important;
     background: #fff !important;
     font-size: 10.5px;
-    line-height: 1.45;
+    line-height: 1.5;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 
+  /* 旧版式把整篇文档的圆角清零；新版式只让卡片类元素带回 ≤10px 圆角。 */
   .quote-document *,
   .quote-print-card,
   .quote-print-card * {
     border-radius: 0 !important;
+  }
+
+  .quote-document .quote-document-section,
+  .quote-document .quote-document-total,
+  .quote-document .quote-document-closing > div,
+  .quote-document .quote-document-sign,
+  .quote-document .quote-document-thumb,
+  .quote-document .quote-document-rule,
+  .quote-document .quote-document-floors img {
+    border-radius: 10px !important;
   }
 
   .quote-print-hidden {
@@ -291,193 +429,276 @@
     display: inline !important;
   }
 
-  .quote-document-floors {
-    display: block;
-    margin: 0;
-  }
-
-  .quote-document-floors figure {
-    box-sizing: border-box;
-    display: flex;
-    height: calc(297mm - 20mm);
-    min-height: 0;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    margin: 0;
-    padding: 8mm 4mm;
-    break-before: page;
-    page-break-before: always;
-    break-after: auto;
-    page-break-after: auto;
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-
-  .quote-document-floors img {
-    width: 100%;
-    height: calc(100% - 24mm);
-    max-height: none;
-    object-fit: contain;
-    border: 1px solid #ddd;
-  }
-
-  .quote-document-floor-kicker {
-    align-self: flex-start;
-    color: #666;
-    font-size: 10px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-
-  .quote-document-floors figcaption {
-    margin-top: 0;
-    font-size: 12px;
-    font-weight: 600;
-    color: #555;
-    text-align: center;
-  }
-
+  /* ---------- 页头 ---------- */
   .quote-document-hero {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
     gap: 24px;
-    border-bottom: 1.5px solid #111;
-    padding-bottom: 14px;
+    border-bottom: 1px solid var(--doc-line);
+    padding-bottom: 8px;
   }
 
-  .quote-document h1 {
-    margin: 6px 0;
-    font-size: 28px;
-    line-height: 1.15;
-  }
-
-  .quote-document h2 {
-    margin: 0;
-    font-size: 14px;
-  }
-
-  .quote-document p {
-    margin: 0;
-    color: #555;
-  }
 
   .quote-document-no {
-    min-width: 148px;
-    border-left: 1px solid #111;
-    padding: 2px 0 2px 16px;
+    flex: none;
+    min-width: 168px;
+    border-left: 3px solid var(--doc-accent);
+    padding: 2px 0 2px 14px;
     text-align: right;
   }
 
-  .quote-document-no span,
-  .quote-document-meta .text-xs,
-  .quote-document-total span {
-    color: #666 !important;
+  .quote-document-no span {
+    display: block;
+    color: var(--doc-soft) !important;
     font-size: 10px;
   }
 
   .quote-document-no strong {
     display: block;
-    margin-top: 4px;
-    font-size: 15px;
+    margin: 3px 0;
+    color: var(--doc-ink);
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
   }
 
+  /* ---------- 标题区 ---------- */
+  .quote-document-title {
+    margin: 12px 0 0;
+  }
+
+  .quote-document h1 {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+  }
+
+  .quote-document-rule {
+    width: 46px;
+    height: 3px;
+    margin: 5px 0 6px;
+    background: var(--doc-accent);
+    border-radius: 2px !important;
+  }
+
+  .quote-document .quote-document-project {
+    color: var(--doc-ink);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  /* ---------- 信息区 ---------- */
   .quote-document-meta {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 0;
-    margin: 14px 0 16px;
-    border: 1px solid #d4d4d4;
-    border-right: 0;
-    border-bottom: 0;
-  }
-
-  .quote-document-meta > div {
-    min-height: 44px;
-    border-right: 1px solid #d4d4d4;
-    border-bottom: 1px solid #d4d4d4;
-    padding: 8px 10px;
-  }
-
-  .quote-document-total {
-    display: grid;
-    grid-template-columns: minmax(180px, 0.72fr) minmax(0, 1.28fr);
-    gap: 0;
-    margin-bottom: 16px;
-    border: 1.5px solid #111;
-    color: #111;
+    gap: 8px 18px;
+    margin: 8px 0 0;
+    border: 0;
     padding: 0;
   }
 
-  .quote-document-total > div:first-child {
-    border-right: 1px solid #111;
-    padding: 12px;
+  .quote-document-meta .quote-document-fact {
+    min-width: 0;
+    border: 0;
+    padding: 0;
   }
 
-  .quote-document-total strong {
+  .quote-document-fact span {
     display: block;
-    margin-top: 4px;
-    font-size: 22px;
+    color: var(--doc-soft) !important;
+    font-size: 10px;
   }
 
+  .quote-document-fact strong {
+    display: block;
+    margin-top: 2px;
+    color: var(--doc-ink);
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
+  /* ---------- 大字应收合计 + 四笔金额 ---------- */
+  .quote-document-total {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+    gap: 0 16px;
+    align-items: center;
+    margin: 6px 0 0;
+    border: 0;
+    border-left: 3px solid var(--doc-accent);
+    border-radius: 0 !important;
+    background: var(--doc-bg1);
+    color: var(--doc-ink);
+    padding: 8px 12px;
+    /* 格子必须能收缩，否则金额（不换行）会把整块撑出 A4 可打印宽度，右侧被裁掉。 */
+    min-width: 0;
+  }
+
+  .quote-document-total .quote-document-grand {
+    min-width: 0;
+    border: 0;
+    padding: 0;
+  }
+
+  .quote-document-total span {
+    color: var(--doc-soft) !important;
+    font-size: 10px;
+    line-height: 1.2;
+  }
+
+  .quote-document-total .quote-document-grand strong {
+    display: block;
+    margin-top: 2px;
+    color: var(--doc-accent);
+    font-size: 24px;
+    letter-spacing: -0.01em;
+    line-height: 1;
+  }
+
+  /* 三笔明细：产品合计（折后）/ 调试安装费用 / 报价总价，与旧版式一致。 */
   .quote-document-total-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
   }
 
   .quote-document-total-grid-compact {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .quote-document-total-grid span {
-    color: #666 !important;
-  }
-
   .quote-document-total-grid > div {
-    border-right: 1px solid #ddd;
-    padding: 12px;
+    min-width: 0;
+    border: 0;
+    padding: 0;
   }
 
-  .quote-document-total-grid > div:last-child {
-    border-right: 0;
+  .quote-document-total-grid strong {
+    display: block;
+    margin-top: 1px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.2;
   }
 
+  .quote-document-total-grid > div:last-child strong {
+    color: var(--doc-accent);
+  }
+
+  /* ---------- 明细：分组标题行 + 列名 ---------- */
   .quote-document-sections {
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    margin-top: 16px;
+    gap: 6px;
+    margin-top: 6px;
   }
 
+  .quote-document-cols {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    /* 右内边距取数字列的内边距（8px），列名才和金额右缘对齐。 */
+    padding: 0 8px 3px 2px;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .quote-document-cols h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+  }
+
+  .quote-document-cols > div > span {
+    display: block;
+    margin-top: 0;
+    color: var(--doc-soft);
+    font-size: 10px;
+    line-height: 1.25;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 列名与分组卡片右缘对齐：三个数字列的比例和表格列宽一致。 */
+  .quote-document-cols-labels {
+    display: grid;
+    flex: none;
+    width: 31%;
+    grid-template-columns: 9fr 11fr 11fr;
+  }
+
+  .quote-document-cols-labels .c-amount {
+    display: block;
+    color: var(--doc-soft);
+    font-size: 10px;
+    text-align: right;
+  }
+
+  /* ---------- 明细：每个分组一张卡片 ---------- */
   .quote-document-section {
     break-inside: auto;
-    border: 1px solid #bdbdbd;
+    border: 0;
+    border-radius: 10px !important;
+    background: var(--doc-bg1);
     overflow: hidden;
   }
 
   .quote-document-section-title {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-bottom: 1px solid #bdbdbd;
-    background: #fff;
-    padding: 8px 10px;
+    align-items: baseline;
+    gap: 10px;
+    border-bottom: 1px solid var(--doc-line);
+    background: transparent;
+    padding: 6px 12px 5px;
     break-after: avoid;
     page-break-after: avoid;
   }
 
-  .quote-document-section-title span {
-    font-weight: 700;
+  .quote-document-section-title h2 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .quote-document-section-count {
+    color: var(--doc-soft) !important;
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .quote-document-section-sum {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    margin-left: auto;
+    white-space: nowrap;
+  }
+
+  .quote-document-section-sum-label {
+    color: var(--doc-soft) !important;
+    font-size: 10px;
+  }
+
+  .quote-document-section-title .quote-document-section-sum strong {
+    color: var(--doc-ink);
+    font-size: 13px;
+    font-weight: 600;
   }
 
   .quote-document table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     table-layout: fixed;
-    font-size: 10px;
+    font-size: 10.5px;
   }
 
   .quote-document thead {
@@ -489,77 +710,352 @@
     page-break-inside: avoid;
   }
 
+  /* 六列全部给比例：fixed 布局下留 auto 列会被浏览器重新分配宽度，列宽就跟列名对不上了。 */
   .quote-document th:nth-child(1),
-  .quote-document td:nth-child(1) { width: 30%; }
+  .quote-document td:nth-child(1) { width: 34%; }
+
   .quote-document th:nth-child(2),
-  .quote-document td:nth-child(2) { width: 22%; color: #555; }
+  .quote-document td:nth-child(2) { width: 21%; }
+
   .quote-document th:nth-child(3),
   .quote-document td:nth-child(3) { width: 14%; }
+
   .quote-document th:nth-child(4),
-  .quote-document td:nth-child(4) { width: 8%; white-space: nowrap; }
+  .quote-document td:nth-child(4) { width: 9%; }
+
   .quote-document th:nth-child(5),
-  .quote-document td:nth-child(5) { width: 13%; white-space: nowrap; text-align: right; }
+  .quote-document td:nth-child(5),
   .quote-document th:nth-child(6),
-  .quote-document td:nth-child(6) { width: 13%; white-space: nowrap; text-align: right; font-weight: 600; }
+  .quote-document td:nth-child(6) { width: 11%; }
+
+  .quote-document th.c-amount,
+  .quote-document td.c-amount {
+    white-space: nowrap;
+  }
 
   .quote-document th {
-    background: #f7f7f7;
-    color: #333;
-    font-weight: 600;
+    border-top: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--doc-line);
+    background: transparent;
+    color: var(--doc-soft);
+    font-weight: 500;
     text-align: left;
   }
 
   .quote-document th,
   .quote-document td {
-    border-top: 1px solid #e5e5e5;
-    border-right: 1px solid #e5e5e5;
-    padding: 7px !important;
+    border-top: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--doc-line);
+    padding: 5px 10px !important;
     vertical-align: middle;
     overflow-wrap: anywhere;
   }
 
-  .quote-document th:last-child,
-  .quote-document td:last-child {
-    border-right: 0;
+  /* 数字列不需要两侧大留白，否则 ¥12,345.67 这种金额会顶出列宽。 */
+  .quote-document th:nth-child(n + 4),
+  .quote-document td:nth-child(n + 4) {
+    padding: 5px 8px !important;
+  }
+
+  .quote-document tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .quote-document th:nth-child(n + 4) {
+    text-align: right;
+  }
+
+  .quote-document td:nth-child(n + 4) {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .quote-document td:nth-child(6) {
+    color: var(--doc-ink);
+    font-weight: 600;
   }
 
   .quote-document-product {
     display: flex;
     align-items: center;
     gap: 8px;
-    min-width: 180px;
+    min-width: 0;
   }
 
-  .quote-document-product strong {
+  .quote-document-thumb {
     display: block;
-    font-size: 10px;
+    position: relative;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    overflow: hidden;
+    border: 1px solid var(--doc-line);
+    border-radius: 8px !important;
+    background: #fff;
+  }
+
+  .quote-document-product-text {
+    min-width: 0;
+  }
+
+  .quote-document-product-text strong {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
     line-height: 1.35;
   }
 
-  .quote-document-product span {
-    color: #666;
-    font-size: 9px;
-  }
-
-  .quote-document-footer {
-    display: grid;
-    grid-template-columns: 0.7fr 1.3fr 1fr;
-    gap: 16px;
-    margin-top: 18px;
-  }
-
-  .quote-document-footer > div {
-    min-height: 72px;
-    border-top: 1px solid #bdbdbd;
-    border-right: 0;
-    border-bottom: 0;
-    border-left: 0;
-    padding: 12px;
-  }
-
-  .quote-document-footer strong {
+  .quote-document-product-text span {
     display: block;
-    margin-bottom: 6px;
+    color: var(--doc-soft);
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
+  /* 核验标识与配套未计入说明是客户要逐行看清的信息（ADR 0006），按正文口径给 10.5px。 */
+  .quote-document-product-text .quote-document-verify {
+    font-size: 10.5px;
+    line-height: 1.35;
+  }
+
+  /* ADR 0006：未核验行必须逐行看得见，不能只藏在悬停提示里。 */
+  .quote-document-verify {
+    color: var(--doc-accent) !important;
+  }
+
+  .quote-document-spec {
+    color: var(--doc-muted) !important;
+    font-size: 10.5px;
+    line-height: 1.4;
+  }
+
+  .quote-document-room {
+    color: var(--doc-muted) !important;
+    font-size: 10.5px;
+  }
+
+  .quote-document-num {
+    color: var(--doc-muted) !important;
+    font-size: 10.5px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .quote-document-line-total {
+    color: var(--doc-ink) !important;
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+
+  /* ---------- 费用构成 + 报价说明 ---------- */
+  .quote-document-closing {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+    margin-top: 6px;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .quote-document-closing > div {
+    min-width: 0;
+    border-radius: 10px !important;
+    background: var(--doc-bg1);
+    padding: 8px 12px;
+  }
+
+  .quote-document-closing h2 {
+    margin: 0 0 2px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.15;
+  }
+
+  .quote-document-fee-row,
+  .quote-document-fee-total {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .quote-document-fee-row {
+    padding: 1px 0;
+    line-height: 1.15;
+  }
+
+  .quote-document-fee-row span {
+    color: var(--doc-muted) !important;
+    font-size: 10.5px;
+  }
+
+  .quote-document-fee-row strong {
+    color: var(--doc-ink);
+    font-size: 11px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .quote-document-fee-total {
+    margin-top: 6px;
+    border-top: 1px solid var(--doc-line-strong);
+    padding-top: 6px;
+    line-height: 1.15;
+  }
+
+  .quote-document-fee-total span {
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+
+  .quote-document-fee-total strong {
+    color: var(--doc-accent);
+    font-size: 17px;
+    font-weight: 700;
+  }
+
+  .quote-document-notes p {
+    margin-top: 4px;
+    color: var(--doc-muted);
+    font-size: 10.5px;
+    line-height: 1.55;
+  }
+
+  /* 收尾区按子块自然流动：每个子块自己不许内部断开即可，不要整体避断
+     （整体避断会在品牌数据填全时把整块推到下一页，第一页留下半页空白）。 */
+  .quote-document-contact {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    /* 只压报价单里的联系方式块：共用 .document-contact 自身的规则一个字没动。 */
+    margin-top: 6px;
+  }
+
+  .quote-document .document-contact {
+    margin-top: 0;
+    padding-top: 6px;
+  }
+
+  .quote-document .document-contact img {
+    width: 72px;
+    height: 72px;
+  }
+
+  /* ---------- 旧版式页脚的署名（公司名 + 客户报价专用文件） ---------- */
+  .quote-document-brandfoot {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 6px;
+    border-top: 1px solid var(--doc-line);
+    padding-top: 6px;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .quote-document-brandfoot strong {
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+
+  .quote-document-brandfoot span {
+    color: var(--doc-soft);
+    font-size: 10px;
+  }
+
+  /* ---------- 客户确认签字（只有客户这一栏，与旧版式一致） ---------- */
+  .quote-document-sign {
+    margin-top: 6px;
+    border: 1px solid var(--doc-line);
+    border-radius: 10px !important;
+    padding: 8px 12px;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .quote-document-sign h2 {
+    margin: 0 0 2px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.15;
+  }
+
+  .quote-document-sign-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 1px 0;
+  }
+
+  .quote-document-sign-row > span:first-child {
+    flex: none;
+    width: 34px;
+    color: var(--doc-soft);
+    font-size: 10.5px;
+  }
+
+  .quote-document-sign-line {
+    flex: 1 1 auto;
+    min-width: 0;
+    border-bottom: 1px solid var(--doc-line-strong);
+    height: 11px;
+    color: var(--doc-muted);
+    font-size: 10.5px;
+    line-height: 11px;
+  }
+
+
+  /* ---------- 楼层点位图：保持每层一页、整页居中 ---------- */
+  .quote-document-floors {
+    display: block;
+    margin: 0;
+  }
+
+  .quote-document-floors figure {
+    box-sizing: border-box;
+    display: flex;
+    /* 比可打印高度留 2mm 余量：页码框与取整误差会把满高撑出第二张纸。 */
+    height: calc(297mm - 22mm);
+    min-height: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 0;
+    padding: 6mm 4mm;
+    break-before: page;
+    page-break-before: always;
+    break-after: auto;
+    page-break-after: auto;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .quote-document-floors img {
+    width: 100%;
+    height: calc(100% - 20mm);
+    max-height: none;
+    object-fit: contain;
+    border: 1px solid var(--doc-line);
+    border-radius: 10px !important;
+    background: #fff;
+  }
+
+  .quote-document-floor-kicker {
+    align-self: flex-start;
+    color: var(--doc-soft);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .quote-document-floors figcaption {
+    margin-top: 0;
+    color: var(--doc-muted);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
   }
 }
 

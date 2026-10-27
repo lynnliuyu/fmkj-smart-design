@@ -58,7 +58,7 @@ export function ProjectSavedDesignSummary({ projectId }: { projectId: string }) 
   if (error) {
     return (
       <div className="space-y-3 rounded-lg border border-destructive/30 p-4" role="alert">
-        <p className="flex items-start gap-2 text-sm text-destructive">
+        <p className="flex items-start gap-2 text-sm text-destructive-strong">
           <AlertCircle className="mt-0.5 size-4 shrink-0" />
           {error}
         </p>
@@ -88,18 +88,25 @@ export function ProjectSavedDesignSummary({ projectId }: { projectId: string }) 
   const pendingScenes = (plan.scenes ?? []).filter((scene) => scene.status !== "confirmed").length
   const floorplanCount = floors.filter((floor) => floor.floorplanDataUrl).length
   const pointMapHref = `/point-map?projectId=${encodeURIComponent(projectId)}`
+  // 0 值不占位：没有待定位、没有待选型、没有待确认场景时，这句话里就不出现它们。
+  const summary = [
+    `r${saved.revision}`,
+    `底图 ${floorplanCount} / ${floors.length}`,
+    `点位 ${plan.points.length} 个（${placedCount} 已定位${pendingCount > 0 ? `、${pendingCount} 待定位` : ""}）`,
+    pendingProducts > 0 ? `商品待选型 ${pendingProducts} 个` : "",
+    sceneCount > 0 ? `场景 ${sceneCount} 个${pendingScenes > 0 ? `（${pendingScenes} 待确认）` : ""}` : "",
+  ].filter(Boolean)
 
   return (
     <div className="space-y-4" aria-label="已保存点位草稿">
       <p className="text-sm">
         <span className="font-medium">已保存点位草稿</span>
-        <span className="text-muted-foreground">
-          {" "}· r{saved.revision} · 底图 {floorplanCount} / {floors.length} · 点位 {plan.points.length} 个（{placedCount} 已定位、{pendingCount} 待定位） · 商品待选型 {pendingProducts} 个 · 场景待确认 {pendingScenes} / {sceneCount} 个
-        </span>
+        <span className="text-muted-foreground"> · {summary.join(" · ")}</span>
       </p>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {floors.map((floor) => {
           const points = plan.points.filter((point) => point.floorId === floor.id)
+          const pending = points.filter((point) => !point.placed).length
           return (
             <Link key={floor.id} href={pointMapHref} className="overflow-hidden rounded-lg border transition-colors hover:border-primary/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
               <div className="flex aspect-[4/3] items-center justify-center border-b bg-white p-2">
@@ -111,7 +118,9 @@ export function ProjectSavedDesignSummary({ projectId }: { projectId: string }) 
               </div>
               <div className="space-y-1 p-3">
                 <p className="text-sm font-medium">{floor.name}</p>
-                <p className="text-xs text-muted-foreground">{points.length} 个点位 · {points.filter((point) => !point.placed).length} 个待定位</p>
+                <p className="text-xs text-muted-foreground">
+                  {points.length} 个点位{pending > 0 ? ` · ${pending} 个待定位` : ""}
+                </p>
               </div>
             </Link>
           )

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { signSessionToken, setSessionCookie, type AuthUser } from "@/lib/auth"
 import { getPool, hasDatabaseUrl } from "@/lib/server-db"
+import { SELF_SIGNUP_CLOSED_MESSAGE, selfSignupAllowed } from "@/lib/self-signup"
 
 type DbUser = {
   id: string
@@ -16,6 +17,11 @@ type DbUser = {
 const SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000000"
 
 export async function POST(request: NextRequest) {
+  // 设备版关掉自助注册：内网穿透暴露到公网时，不能让陌生人在这台机器上开账号。
+  if (!selfSignupAllowed()) {
+    return NextResponse.json({ error: SELF_SIGNUP_CLOSED_MESSAGE }, { status: 403 })
+  }
+
   try {
     const body = await request.json()
     const name = String(body.name ?? "").trim()

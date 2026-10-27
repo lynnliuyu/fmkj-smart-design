@@ -4,6 +4,15 @@ export type ProjectOwnerScope =
   | { ownerType: "organization"; ownerId: string }
   | { ownerType: "user"; ownerId: string }
 
+export type ProjectMembershipAccess = { createdBy: string; accessLevel: string | null }
+
+/** A visible project can still have an explicit read-only assignment. */
+export function canWriteProjectMembership(context: AccountContext, project: ProjectMembershipAccess) {
+  if (context.account.type !== "ENTERPRISE_MEMBER") return true
+  if (project.accessLevel === "view") return false
+  return project.createdBy === context.user.userId || project.accessLevel === "admin" || project.accessLevel === "edit"
+}
+
 export function resolveProjectOwnerScope(context: AccountContext): ProjectOwnerScope {
   if (context.account.isEnterprise && context.organization) {
     return { ownerType: "organization", ownerId: context.organization.id }

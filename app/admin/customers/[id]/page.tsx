@@ -5,6 +5,7 @@ import { ArrowLeft, CalendarClock, Mail, Phone, ShieldCheck } from "lucide-react
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { formatDateTime } from "@/lib/format-datetime"
 import { Separator } from "@/components/ui/separator"
 import {
   getPlatformCustomer,
@@ -63,7 +64,7 @@ export default async function AdminCustomerDetailPage({ params }: PageProps) {
             <InfoRow
               icon={CalendarClock}
               label="最近登录"
-              value={customer.lastLoginAt ? new Date(customer.lastLoginAt).toLocaleString("zh-CN") : "从未登录"}
+              value={customer.lastLoginAt ? formatDateTime(customer.lastLoginAt) : "从未登录"}
             />
             <Separator />
             <div className="grid gap-1">
@@ -118,7 +119,7 @@ export default async function AdminCustomerDetailPage({ params }: PageProps) {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="font-medium">{activity.title}</div>
                     <div className="text-xs text-muted-foreground">
-                      {new Date(activity.occurredAt).toLocaleString("zh-CN")}
+                      {formatDateTime(activity.occurredAt)}
                     </div>
                   </div>
                   <div className="mt-1 text-sm text-muted-foreground">{activity.description}</div>

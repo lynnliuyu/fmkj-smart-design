@@ -102,6 +102,14 @@ async function seed() {
       [user.id]
     )
 
+    // 本机管理员恢复/创建同样永久关闭匿名初始化，之后停用或删除账号也不重开。
+    await pool.query(
+      `insert into platform_settings (key, value, updated_by_user_id)
+       values ('INTERNAL_FIRST_RUN_INITIALIZED', now()::text, $1::uuid)
+       on conflict (key) do nothing`,
+      [user.id]
+    )
+
     console.log("\nSuper admin created or updated.")
     console.log(`ID: ${user.id}`)
     console.log(`Email: ${user.email}`)

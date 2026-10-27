@@ -14,7 +14,7 @@ import {
   UploadCloud,
 } from "lucide-react";
 
-import { ProjectListHeader, ProjectSearchInput } from "@/components/business/project-list-shell";
+import { ProjectListHeader } from "@/components/business/project-list-shell";
 import { StatStrip } from "@/components/business/summary-tile";
 import {
   fetchProjectListRows,
@@ -22,17 +22,9 @@ import {
   projectMatchesQuery,
   projectStageLabel,
 } from "@/lib/project-list";
-import { SummaryTile } from "@/components/business/summary-tile";
 import { AdminDataTable } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -141,16 +133,6 @@ export function ContractsWorkbench() {
       : []
     : projects;
 
-  const visibleProjects = scopedProjects.filter((project) =>
-    projectMatchesQuery(query, [
-      project.name,
-      project.code,
-      project.customer,
-      project.stage,
-      projectStageLabel(project.stage),
-      ...(attachmentsByProject[project.id] ?? []).map((contract) => contract.fileName),
-    ]),
-  );
   const previewProject =
     projects.find((project) => project.id === previewProjectId) ?? null;
   const previewContracts = previewProject
@@ -167,6 +149,17 @@ export function ContractsWorkbench() {
     (sum, project) => sum + (attachmentsByProject[project.id] ?? []).length,
     0,
   );
+  // 没有合同文件时这几个统计全是 0，不渲染比显示 0 更安静。
+  const contractStats: Array<{ label: string; value: number | string }> = [];
+  if (signedProjects.length > 0) {
+    contractStats.push({ label: "已上传合同", value: signedProjects.length });
+  }
+  if (scopedFileCount > 0) {
+    contractStats.push({ label: "合同文件", value: scopedFileCount });
+  }
+  if (contractAmount > 0) {
+    contractStats.push({ label: "签约金额", value: money(contractAmount) });
+  }
   const contractColumns = React.useMemo(
     () =>
       createContractColumns(
@@ -254,21 +247,10 @@ export function ContractsWorkbench() {
 
   return (
     <section className="flex flex-col gap-5">
-      <div>
-        <ProjectListHeader
-          title="合同管理"
-          actions={
-            <ProjectSearchInput
-              value={query}
-              onChange={setQuery}
-              placeholder="搜索项目、客户、合同文件"
-            />
-          }
-        />
-      </div>
+      <ProjectListHeader title="合同管理" />
 
       {requestedProjectId ? (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border bg-muted/20 px-3 py-2 text-sm">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border bg-muted/20 px-3 py-2 text-sm">
           <span className="font-medium">
             {scopedProject ? `仅看本项目：${scopedProject.name}` : "未找到该项目"}
           </span>
@@ -281,48 +263,28 @@ export function ContractsWorkbench() {
         </div>
       ) : null}
 
-      <StatStrip
-        items={[
-          { label: "项目数", value: scopedProjects.length },
-          { label: "已上传合同", value: signedProjects.length },
-          { label: "合同文件", value: scopedFileCount },
-          { label: "签约金额", value: money(contractAmount) },
-        ]}
+      {/* 项目数与表格重复；值为 0 的统计不占位。 */}
+      {contractStats.length > 0 ? <StatStrip items={contractStats} /> : null}
+
+      <AdminDataTable
+        columns={contractColumns}
+        data={scopedProjects}
+        emptyText="没有匹配项目"
+        getRowId={(project) => project.id}
+        globalFilter={query}
+        onGlobalFilterChange={setQuery}
+        globalFilterFn={(project, value) =>
+          projectMatchesQuery(value, [
+            project.name,
+            project.code,
+            project.customer,
+            project.stage,
+            projectStageLabel(project.stage),
+            ...(attachmentsByProject[project.id] ?? []).map((contract) => contract.fileName),
+          ])
+        }
+        searchPlaceholder="搜索项目、客户、合同文件"
       />
-
-      <div className="grid gap-5">
-        <Card>
-          <CardHeader>
-            <CardTitle>项目合同</CardTitle>
-            <CardDescription>
-              {visibleProjects.length} 个匹配项目
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AdminDataTable
-              columns={contractColumns}
-              data={visibleProjects}
-              emptyText="没有匹配项目"
-              getRowId={(project) => project.id}
-              globalFilterFn={(project, value) => {
-                const contracts = attachmentsByProject[project.id] ?? [];
-
-                return [
-                  project.name,
-                  project.code,
-                  project.customer,
-                  projectStageLabel(project.stage),
-                  ...contracts.map((contract) => contract.fileName),
-                ]
-                  .join(" ")
-                  .toLowerCase()
-                  .includes(value.toLowerCase());
-              }}
-              searchPlaceholder="筛选合同项目..."
-            />
-          </CardContent>
-        </Card>
-      </div>
 
       <Sheet open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
         <SheetContent className="w-full sm:max-w-md">
@@ -330,7 +292,7 @@ export function ContractsWorkbench() {
             <SheetTitle>合同预览</SheetTitle>
             <SheetDescription>
               {previewProject
-                ? `${previewProject.name} / ${previewProject.customer || "-"}`
+                ? [previewProject.name, previewProject.customer].filter(Boolean).join(" / ")
                 : "查看合同详情"}
             </SheetDescription>
           </SheetHeader>
@@ -372,28 +334,32 @@ function createContractColumns(
     {
       accessorKey: "name",
       header: "项目",
-      cell: ({ row }) => (
-        <div>
-          <div className="font-medium">{row.original.name}</div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            {row.original.customer || "-"} / {row.original.code}
+      cell: ({ row }) => {
+        // 客户与项目编号合并一行，缺哪项就不出现哪项的分隔符。
+        const meta = [row.original.customer, row.original.code]
+          .filter(Boolean)
+          .join(" / ");
+
+        return (
+          <div>
+            <div className="font-medium">{row.original.name}</div>
+            {meta ? (
+              <div className="mt-1 text-xs text-muted-foreground">{meta}</div>
+            ) : null}
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       accessorKey: "stage",
-      header: "状态",
+      header: "合同状态",
       cell: ({ row }) => {
         const contracts = attachmentsByProject[row.original.id] ?? [];
 
         return (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <StageBadge stage={row.original.stage} />
-            <Badge variant={contracts.length ? "default" : "outline"}>
-              {contracts.length ? "已签约" : "待合同"}
-            </Badge>
-          </div>
+          <Badge variant={contracts.length ? "default" : "outline"}>
+            {contracts.length ? "已签约" : "待合同"}
+          </Badge>
         );
       },
     },
@@ -401,19 +367,21 @@ function createContractColumns(
       accessorKey: "createdAt",
       header: "创建时间",
       cell: ({ row }) => (
-        <div className="text-muted-foreground">
+        <div className="tabular-nums text-muted-foreground">
           {formatProjectDate(row.original.createdAt)}
         </div>
       ),
     },
     {
       accessorKey: "quoteAmount",
-      header: "报价金额",
+      header: () => <div className="text-right">报价金额</div>,
       cell: ({ row }) => (
-        <div className="text-right font-medium">
-          {row.original.quoteAmount
-            ? money(row.original.quoteAmount)
-            : "待报价"}
+        <div className="text-right font-medium tabular-nums">
+          {row.original.quoteAmount ? (
+            money(row.original.quoteAmount)
+          ) : (
+            <span className="font-normal text-muted-foreground">待报价</span>
+          )}
         </div>
       ),
     },
@@ -501,30 +469,15 @@ function ContractPreview({
   uploadingProjectId: string | null;
 }) {
   return (
-    <div className="space-y-6 pb-4">
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <StageBadge stage={project.stage} />
-          <Badge variant={contracts.length ? "default" : "outline"}>
-            {contracts.length ? "已上传合同" : "待上传合同"}
-          </Badge>
-        </div>
-        <h2 className="text-base font-semibold leading-6">{project.name}</h2>
-        <p className="text-sm text-muted-foreground">
-          {project.code} / {project.customer || "-"}
-        </p>
-      </div>
+    <div className="space-y-5 pb-4">
+      {/* 项目名与客户已在抽屉标题里；合同有没有上传，下面的文件列表已经说明。 */}
+      <StageBadge stage={project.stage} />
 
-      <div className="grid gap-3 text-sm">
-        <SummaryTile label="客户" value={project.customer || "-"} />
-        <SummaryTile
-          label="报价金额"
-          value={project.quoteAmount ? money(project.quoteAmount) : "待生成"}
-        />
-        <SummaryTile
-          label="合同状态"
-          value={contracts.length ? "已上传合同" : "待上传合同"}
-        />
+      <div className="flex items-center justify-between gap-4 border-b pb-3 text-sm">
+        <span className="text-muted-foreground">报价金额</span>
+        <span className="font-medium tabular-nums">
+          {project.quoteAmount ? money(project.quoteAmount) : "待生成"}
+        </span>
       </div>
 
       <div className="space-y-2">
@@ -532,7 +485,7 @@ function ContractPreview({
           <CalendarClock className="size-4 text-muted-foreground" />
           下一步
         </div>
-        <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+        <div className="rounded-md bg-muted/30 p-3 text-sm text-muted-foreground">
           {project.nextAction || "确认合同、收款节点和开工安排。"}
         </div>
       </div>
@@ -598,7 +551,7 @@ function ContractUploadButton({
     <label
       htmlFor={inputId}
       className={cn(
-        "inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-2xl border border-border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted",
+        "inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted",
         disabled && "pointer-events-none opacity-50",
       )}
       onClick={(event) => event.stopPropagation()}
@@ -626,11 +579,7 @@ function ContractUploadButton({
 
 
 function StageBadge({ stage }: { stage: ProjectStage }) {
-  return (
-    <Badge variant={stage === "contract" ? "default" : "outline"}>
-      {projectStageLabel(stage)}
-    </Badge>
-  );
+  return <Badge variant="secondary">{projectStageLabel(stage)}</Badge>;
 }
 
 function money(value: number) {

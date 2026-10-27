@@ -1,0 +1,30 @@
+[Unit]
+Description=FMKJ 设备版：更新管家（客户在页面上点「立即更新」时，由它在设备上代跑）
+Documentation=file:/opt/fmkj/app/docs/local-appliance-deployment.md
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/fmkj/app
+Restart=always
+RestartSec=5
+
+# 和 fmkj-update-check 一样：版本来源与发布方公钥都写在 /opt/fmkj/app/.env 里，由脚本自己读，
+# 这里不写死，换仓库地址不用改 unit。
+EnvironmentFile=-/opt/fmkj/app/.env
+# 自建仓库是自签证书时，把 CA 交给 Node（否则拉取阶段报 UNABLE_TO_VERIFY_LEAF_SIGNATURE）。
+#Environment=NODE_EXTRA_CA_CERTS=/opt/fmkj/app/registry-ca.crt
+
+# 管家只做搬运：读 deploy-state 里的请求文件（里面只有版本号），调仓库里固定的两个脚本。
+# 它本身不监听端口、不接受外部输入。
+ExecStart=/opt/fmkj/tools/node/bin/node scripts/deploy/updater-agent.mjs \
+  --app-dir /opt/fmkj/app \
+  --state-dir /opt/fmkj/app/deploy-state \
+  --compose-file docker-compose.appliance.yml \
+  --poll-seconds 5
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,4 +1,5 @@
 import type { AccountContext } from "./account-context"
+import { requireAccountPermission } from "./account-gates"
 import { projectVisibilityWhere } from "./project-access"
 import { getPool } from "./server-db"
 
@@ -53,6 +54,8 @@ export async function setProjectMemberAccess(input: {
   projectId: string
   userId: string
 }): Promise<ProjectAccessPayload> {
+  const edit = requireAccountPermission(input.context, "project.edit")
+  if (!edit.allowed) throw new ProjectAccessError(edit.reason, 403)
   const project = await requireVisibleProject(input.context, input.projectId)
 
   if (project.ownerType !== "organization" || !project.ownerId) {
@@ -95,6 +98,8 @@ export async function setProjectMemberAccess(input: {
 }
 
 async function requireVisibleProject(context: AccountContext, projectId: string) {
+  if (context.account.status !== "active") throw new ProjectAccessError("ACCOUNT_DISABLED", 403)
+  if (!context.permissions.includes("project.view")) throw new ProjectAccessError("ROLE_PERMISSION_DENIED", 403)
   const visibility = projectVisibilityWhere(context, 1)
   const result = await getPool().query<{
     createdBy: string
@@ -123,6 +128,7 @@ async function requireVisibleProject(context: AccountContext, projectId: string)
 }
 
 function canManageProjectAccess(context: AccountContext, organizationId: string) {
+  if (!requireAccountPermission(context, "project.edit").allowed) return false
   return (
     context.account.isSuperAdmin ||
     (context.account.type === "ENTERPRISE_OWNER" && context.organization?.id === organizationId) ||

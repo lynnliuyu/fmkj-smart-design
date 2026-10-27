@@ -17,6 +17,17 @@ vi.mock("@/lib/fallback-products", () => ({ fallbackProducts: [] }))
 vi.mock("@/lib/product-categories", async () => await import("../lib/product-categories"))
 vi.mock("@/lib/product-selection", async () => await import("../lib/product-selection"))
 vi.mock("@/lib/product-visual-assets-service", () => ({ loadProductVisualAssets: async () => new Map() }))
+// GET 现在会读会话决定要不要返回成本；这里给一个「经营管理者」上下文，等价于管理员在浏览器里打开。
+vi.mock("@/lib/account-context", () => ({
+  accountContextCan: () => true,
+  getCurrentAccountContext: async () => ({
+    account: { canManageTeam: false, canUsePointMap: true, isEnterprise: false, isSuperAdmin: true, status: "active", subscriptionStatus: null, type: "PERSONAL_PRO" },
+    disabledFeatures: [],
+    organization: null,
+    permissions: [],
+    user: { email: null, name: "测试", phone: null, role: "admin", userId: "30000000-0000-0000-0000-000000000009" },
+  }),
+}))
 import { AdminAuthError } from "../lib/admin-auth"
 import { GET, POST } from "../app/api/products/route"
 

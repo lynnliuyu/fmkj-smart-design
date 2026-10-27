@@ -1,6 +1,12 @@
 # syntax=docker/dockerfile:1
 
 FROM node:22-alpine AS base
+# 构建时下载 pnpm 与依赖走哪个源。默认官方源；国内网络经常在容器里超时，
+# 构建时加 --build-arg NPM_REGISTRY=https://registry.npmmirror.com 即可换镜像源。
+# 只影响构建，镜像运行时不再联网取包。
+ARG NPM_REGISTRY=https://registry.npmjs.org
+ENV COREPACK_NPM_REGISTRY="$NPM_REGISTRY"
+ENV npm_config_registry="$NPM_REGISTRY"
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 WORKDIR /app

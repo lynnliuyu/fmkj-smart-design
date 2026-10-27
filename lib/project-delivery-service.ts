@@ -6,6 +6,7 @@ import { LOCAL_FILE_PREFIX, readLocalFile } from "./file-storage"
 import { quoteVerification } from "./quote-verification"
 
 import type { AccountContext } from "./account-context"
+import { canViewProductCost, stripSnapshotCosts } from "./product-cost"
 import { normalizeDesignPlan } from "./point-map-design"
 import type { PointMapPlan } from "./point-map-plan"
 import { assertPermission, assertWritableMembership, PointMapServiceError, requireContext, requireVisibleProject } from "./point-map-service"
@@ -40,7 +41,8 @@ export async function previewProjectDelivery(context: AccountContext | null, pro
   return deliveryTransaction(context, projectId, false, dependencies, async (client, account) => {
     assertPermission(account, "point_map.use")
     const previous = await latestSnapshot(client, projectId)
-    return captureDelivery(client, projectId, previous, dependencies)
+    const snapshot = await captureDelivery(client, projectId, previous, dependencies)
+    return redactDeliveryCosts(snapshot, account)
   })
 }
 
@@ -63,7 +65,7 @@ async function createDeliveryOnce(context: AccountContext | null, projectId: str
     const existing = await client.query<{ snapshot: ProjectDeliverySnapshot }>(
       `select snapshot from project_deliveries where project_id = $1::uuid and fingerprint = $2`, [projectId, snapshot.fingerprint],
     )
-    if (existing.rows[0]) return { ...existing.rows[0].snapshot, reused: true }
+    if (existing.rows[0]) return redactDeliveryCosts({ ...existing.rows[0].snapshot, reused: true }, account)
     const version = (previous?.version ?? 0) + 1
     const id = dependencies.createId?.() ?? randomUUID()
     const stored: ProjectDeliverySnapshot = { ...snapshot, id, version }
@@ -72,7 +74,7 @@ async function createDeliveryOnce(context: AccountContext | null, projectId: str
        values ($1::uuid, $2::uuid, $3, $4, $5::jsonb, $6::uuid, $7::timestamptz)`,
       [id, projectId, version, stored.fingerprint, JSON.stringify(stored), account.user.userId, stored.createdAt],
     )
-    return stored
+    return redactDeliveryCosts(stored, account)
   })
 }
 
@@ -98,7 +100,8 @@ export async function getProjectDelivery(context: AccountContext | null, project
     )
     if (!result.rows[0]) throw new ProjectDeliveryError("DELIVERY_NOT_FOUND", 404, "DELIVERY_NOT_FOUND")
     // Historical reads intentionally do not load today's catalogue or files.
-    return result.rows[0].snapshot
+    // Costs are stored for authorized business users, but are filtered at every read boundary.
+    return redactDeliveryCosts(result.rows[0].snapshot, account)
   })
 }
 
@@ -261,6 +264,23 @@ async function readQuote(client: Client, projectId: string): Promise<ProjectDeli
   }
 }
 
+/** Match point-map procurement room labels, including legacy rows already prefixed with a floor. */
+function deliveryRoomLabel(floor: string | undefined, room: string) {
+  return floor && !room.startsWith(`${floor} / `) ? `${floor} / ${room}` : room
+}
+
+/** Remove internal cost data from snapshots returned to accounts without finance visibility. */
+function redactDeliveryCosts(snapshot: ProjectDeliverySnapshot, account: AccountContext): ProjectDeliverySnapshot {
+  if (canViewProductCost(account) || !snapshot.quote) return snapshot
+  const quote = {
+    ...snapshot.quote,
+    items: snapshot.quote.items.map((item) => stripSnapshotCosts(item)),
+  }
+  // The public JSON intentionally omits `cost`; keep the internal snapshot type for
+  // capture/fingerprint code while enforcing the redaction at this boundary.
+  return { ...snapshot, quote: quote as ProjectDeliveryQuote }
+}
+
 /** Semantic source checks deliberately ignore point-map revisions and layout. */
 export function assertDeliverySources(plan: PointMapPlan, quote: ProjectDeliveryQuote | null): number {
   if (!quote) return 0
@@ -282,7 +302,7 @@ export function assertDeliverySources(plan: PointMapPlan, quote: ProjectDelivery
     for (const id of new Set(ids)) {
       const point = pointById.get(id)
       if (!point) { issues.push(`${item.name}：关联点位 ${id} 已不存在。`); continue }
-      const expectedRoom = point.floorId && floorById.has(point.floorId) ? `${floorById.get(point.floorId)} / ${point.room}` : point.room
+      const expectedRoom = deliveryRoomLabel(point.floorId ? floorById.get(point.floorId) : undefined, point.room)
       if (item.room !== expectedRoom) issues.push(`${point.code || id}：房间已变为“${expectedRoom}”，报价仍为“${item.room}”。`)
       const material = point.materials?.filter((entry) => entry.productId === item.id)
       if (material?.length) {

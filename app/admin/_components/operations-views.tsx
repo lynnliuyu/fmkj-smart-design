@@ -1,5 +1,10 @@
+import { UpdatePanel } from "./update-panel"
 import type { DatabaseStatus, EnvironmentStatus, ServerStatus } from "@/lib/platform-health"
+import type { DeployStatus } from "@/lib/deploy-status"
+import type { UpdateStatus } from "@/lib/deploy-update"
 import type { PlatformSetting } from "@/lib/platform-settings"
+import { formatDateTime } from "@/lib/format-datetime"
+import { BackupPanel } from "@/app/admin/_components/backup-panel"
 import { PlatformListCard } from "@/app/admin/_components/platform-list"
 import { SystemSettingsPanel } from "@/app/admin/_components/system-settings-panel"
 import { Badge } from "@/components/ui/badge"
@@ -8,14 +13,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 export function SystemHealthView({
   database,
+  deploy,
   environment,
   settings,
   server,
+  update,
 }: {
   database: DatabaseStatus
+  deploy: DeployStatus
   environment: EnvironmentStatus
   settings: PlatformSetting[]
   server: ServerStatus
+  update: UpdateStatus
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -31,15 +40,97 @@ export function SystemHealthView({
           <CardTitle>服务器</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 text-sm md:grid-cols-2">
-          <Info label="当前时间" value={new Date(server.now).toLocaleString("zh-CN")} />
+          <Info label="当前时间" value={formatDateTime(server.now, "时间未知")} />
           <Info label="Node 环境" value={nodeEnvLabel(server.nodeEnv)} />
           <Info label="数据库名称" value={database.database ?? "不可用"} />
           <Info label="数据库用户" value={database.user ?? "不可用"} />
         </CardContent>
       </Card>
+      <DeployStatusCard deploy={deploy} />
+      <UpdatePanel initial={update} />
+      <BackupPanel />
       <SystemSettingsPanel initialSettings={settings} />
     </div>
   )
+}
+
+/**
+ * 设备版的更新与备份状态。数值来自宿主机脚本写进 deploy-state 的 JSON：
+ * 应用只读，不安装、不备份、不连网（ADR 0010：业务容器不持有 docker socket）。
+ */
+function DeployStatusCard({ deploy }: { deploy: DeployStatus }) {
+  if (!deploy.available) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>软件更新与备份</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          这不是设备版部署，没有接入更新状态。设备版把 deploy-state 目录只读挂进容器后，这里会显示版本检查、更新结果和备份情况。
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const check = deploy.check
+  const update = deploy.update
+  const backup = deploy.backup
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>软件更新与备份</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3 text-sm md:grid-cols-2">
+        <Info label="版本检查" value={checkLabel(check)} tone={check?.updateAvailable ? "warn" : undefined} />
+        <Info
+          label="版本清单来源"
+          value={check?.signature === "verified" ? "已验签（确认是可信发布方）" : "未签名（只保证传输完整）"}
+        />
+        <Info label="上次更新" value={updateLabel(update)} />
+        <Info label="上次备份" value={backupLabel(backup)} />
+        <Info
+          label="更新方式"
+          value={update?.status === "running" ? "正在更新，请不要关闭设备" : "上面点一下就能装；不会在你不注意的时候自己装"}
+        />
+        <div className="rounded-md bg-muted/50 px-3 py-2 md:col-span-2">
+          <div className="text-xs text-muted-foreground">手动更新命令（在设备的部署目录里执行）</div>
+          <code className="mt-1 block break-all font-mono text-xs">
+            node scripts/deploy/update-local.mjs --to &lt;目标版本&gt; --compose-file docker-compose.appliance.yml
+          </code>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function checkLabel(check: DeployStatus["check"]): string {
+  if (!check) return "还没有检查记录（设备上运行 scripts/deploy/check-update.mjs，或开启定时检查）"
+  if (check.error) return `检查失败：${check.error}`
+  if (check.updateAvailable) return `有新版本 ${check.latestVersion}（当前 ${check.currentVersion ?? "未知"}）`
+  return `已是最新（${formatMoment(check.checkedAt)}）`
+}
+
+function updateLabel(update: DeployStatus["update"]): string {
+  if (!update) return "还没有更新记录"
+  if (update.status === "running") return `正在更新到 ${update.target}（${formatMoment(update.startedAt)}）`
+  if (update.status === "succeeded") return `已更新到 ${update.target}（${formatMoment(update.finishedAt)}）`
+  if (update.status === "failed-needs-restore") {
+    return `更新到 ${update.target} 失败在「${update.failedStep ?? "未知"}」，数据库结构已推进，需要用备份恢复`
+  }
+  return `更新到 ${update.target} 失败在「${update.failedStep ?? "未知"}」，旧版本继续服务`
+}
+
+function backupLabel(backup: DeployStatus["backup"]): string {
+  if (!backup) return "还没有备份记录"
+  if (!backup.ok) return `上次备份失败：${backup.error ?? "未知原因"}`
+  return `${formatMoment(backup.createdAt)}（保留 ${backup.kept ?? "?"} 份）`
+}
+
+function formatMoment(value: string | null): string {
+  if (!value) return "时间未知"
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? value : formatDateTime(parsed)
 }
 
 export function EnvironmentView({ environment }: { environment: EnvironmentStatus }) {
@@ -64,7 +155,14 @@ export function EnvironmentView({ environment }: { environment: EnvironmentStatu
                     <TableCell className="font-mono text-xs text-muted-foreground">{item.key}</TableCell>
                     <TableCell>{item.required ? "是" : "否"}</TableCell>
                     <TableCell>
-                      <Badge variant={item.present ? "secondary" : item.required ? "destructive" : "outline"}>
+                      <Badge
+                        variant={item.present ? "secondary" : "outline"}
+                        className={
+                          !item.present && item.required
+                            ? "border-destructive/30 bg-destructive/10 text-destructive-strong"
+                            : undefined
+                        }
+                      >
                         {item.present ? "已配置" : "缺失"}
                       </Badge>
                     </TableCell>
@@ -125,11 +223,11 @@ function Metric({ label, tone, value }: { label: string; tone?: "ok" | "warn"; v
   )
 }
 
-function Info({ label, value }: { label: string; value: string }) {
+function Info({ label, tone, value }: { label: string; tone?: "ok" | "warn"; value: string }) {
   return (
-    <div className="rounded-md border bg-muted/30 px-3 py-2">
+    <div className="rounded-md bg-muted/50 px-3 py-2">
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-1 font-medium">{value}</div>
+      <div className={tone === "warn" ? "mt-1 font-medium text-destructive" : "mt-1 font-medium"}>{value}</div>
     </div>
   )
 }

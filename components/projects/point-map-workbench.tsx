@@ -1,7 +1,7 @@
 "use client";
 
 import { pointMapEditorGeometry, POINT_MAP_EDITOR_SYMBOL_SIZE, POINT_MAP_EDITOR_HIT_SIZE } from "@/lib/point-map-image-size.mjs";
-import { focusPointMapEditorView, groupPointMapEditorMarkers, POINT_MAP_MAX_EDITOR_ZOOM } from "@/lib/point-map-editor-view";
+import { focusPointMapEditorView, POINT_MAP_MAX_EDITOR_ZOOM } from "@/lib/point-map-editor-view";
 import { ProjectViewSwitch } from "@/components/projects/project-view-switch";
 import { useSearchParams } from "next/navigation";
 import * as React from "react";
@@ -14,8 +14,6 @@ import {
   Layers,
   MapPin,
   MapPinned,
-  Maximize2,
-  Minimize2,
   MousePointer2,
   Plus,
   RotateCcw,
@@ -25,6 +23,11 @@ import {
   UploadCloud,
   ZoomIn,
   ZoomOut,
+  Undo2,
+  Redo2,
+  Sparkles,
+  MoreHorizontal,
+  X,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -117,7 +120,7 @@ import {
   type PointDragState,
 } from "@/lib/point-map-interaction";
 import { cn } from "@/lib/utils";
-import { applyPointMapFloorplanCrop, compactPointMapFloorplan } from "@/lib/point-map-floorplan-crop";
+import { applyPointMapFloorplanCrop, commitPointMapFloorplanCrop, compactPointMapFloorplan } from "@/lib/point-map-floorplan-crop";
 import { PointMapCadPanel } from "./point-map-cad-panel";
 import { PointSelectionEditor } from "./point-selection-editor";
 import { PointMaterialsEditor } from "./point-materials-editor";
@@ -132,6 +135,17 @@ import { floorRoomOptions, nextFloorRooms, normalizeRoomName, UNASSIGNED_POINT_R
 const ADD_ROOM_VALUE = "__add_room__";
 /** 画布工具条上的房间筛选占位值；null 表示不筛选。 */
 const FILTER_ALL_ROOMS = "__all_rooms__";
+const COMPACT_INSPECTOR_QUERY = "(max-width: 1023px)";
+
+function subscribeCompactInspector(onChange: () => void) {
+  const query = window.matchMedia(COMPACT_INSPECTOR_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function compactInspectorSnapshot() {
+  return window.matchMedia(COMPACT_INSPECTOR_QUERY).matches;
+}
 
 type Project = {
   id: string;
@@ -179,6 +193,14 @@ const fallbackProducts: Product[] = catalogFallbackProducts.map((product) =>
   toQuoteProduct({ ...product, spec: product.description }),
 );
 
+/**
+ * 画布尺寸必须在浏览器绘制之前量好。
+ * 用 useEffect 的话，首帧会先按初始尺寸画一次、量完再跳成正确的尺寸 ——
+ * 表现就是「打开时跳一下，底图跟着变大小」。用 useLayoutEffect 把测量提前到绘制前。
+ */
+const useBrowserLayoutEffect =
+  typeof window === "undefined" ? React.useEffect : React.useLayoutEffect;
+
 export function PointMapWorkbench({
   readOnly = false,
 }: {
@@ -199,6 +221,11 @@ export function PointMapWorkbench({
   const [selectedProductId, setSelectedProductId] = React.useState("");
   const [activePointId, setActivePointId] = React.useState<string | null>(null);
   const [pointEditorId, setPointEditorId] = React.useState<string | null>(null);
+  const compactInspector = React.useSyncExternalStore(
+    subscribeCompactInspector,
+    compactInspectorSnapshot,
+    () => false,
+  );
   const [draggingPointId, setDraggingPointId] = React.useState<string | null>(
     null,
   );
@@ -218,7 +245,6 @@ export function PointMapWorkbench({
   const [drawingView, setDrawingView] = React.useState<DrawingView>("layout");
   const [referenceState, setReferenceState] = React.useState<{ floorId: string; source: string; view: DrawingView; drawing?: PointMapPresentation; error?: string } | null>(null);
   const [zoom, setZoom] = React.useState(1);
-  const [overlapPointIds, setOverlapPointIds] = React.useState<string[] | null>(null);
   const [pan, setPan] = React.useState({ x: 0, y: 0 });
   const [viewportSize, setViewportSize] = React.useState({
     width: 800,
@@ -249,8 +275,8 @@ export function PointMapWorkbench({
   const [roomsOpen, setRoomsOpen] = React.useState(false);
   const [pointsOpen, setPointsOpen] = React.useState(false);
   const [unplacedOpen, setUnplacedOpen] = React.useState(false);
-  const [fullscreen, setFullscreen] = React.useState(false);
-  const editorCardRef = React.useRef<HTMLDivElement | null>(null);
+  const [conflictOpen, setConflictOpen] = React.useState(false);
+  const [moreOpen, setMoreOpen] = React.useState(false);
   const [dirty, setDirty] = React.useState(false);
   const [localStored, setLocalStored] = React.useState(true);
   const [localRestoring, setLocalRestoring] = React.useState(Boolean(initialProjectId));
@@ -260,6 +286,9 @@ export function PointMapWorkbench({
   const [uploading, setUploading] = React.useState(false);
   const canvasRef = React.useRef<HTMLDivElement | null>(null);
   const viewportRef = React.useRef<HTMLDivElement | null>(null);
+
+  // ⌘Z / ⌘⇧Z 撤销重做。输入框里不拦截，避免抢掉打字时的撤销。
+  const historyActionsRef = React.useRef({ undo: () => {}, redo: () => {} });
   const dragStateRef = React.useRef<PointDragState | null>(null);
   const dragGestureRef = React.useRef<{
     pointId: string;
@@ -304,7 +333,7 @@ export function PointMapWorkbench({
     } catch (error) {
       if (projectRef.current === nextPlan.projectId && sequence === localWriteSequence.current) {
         setLocalStored(false);
-        setMessage(`${errorMessage(error)} 本次修改仍在页面中，请保存到数据库或导出 JSON。`);
+        setMessage(`${errorMessage(error)} 本次修改仍在页面中，请保存草稿或导出 JSON。`);
       }
       return false;
     }
@@ -351,14 +380,6 @@ export function PointMapWorkbench({
   const floorId = floor?.id;
   const floorRooms = floor?.rooms;
   const availableRooms = floorRoomOptions({ propertyType: selectedPropertyType, floor: floorId === undefined ? undefined : { id: floorId, rooms: floorRooms }, points: plan.points });
-  // 平移和拖动会让组件高频重渲染，产品兼容判断是其中最重的一段，必须缓存。
-  const compatibleProducts = React.useMemo(() => {
-    const intent = deviceIntentForIcon(selectedIcon.id);
-    if (!intent) return [];
-    return products.filter(
-      (product) => evaluateProductCompatibility(intent, product).status === "compatible",
-    );
-  }, [products, selectedIcon.id]);
 
   /** 把房间加入当前楼层清单，并一次性指定给点位，避免两次保存互相覆盖。 */
   function addFloorRoom(pointId: string, name: string) {
@@ -397,38 +418,6 @@ export function PointMapWorkbench({
           .includes(value)),
     );
   }, [floorPoints, products, query, roomFilter]);
-  const markerGroups = React.useMemo(
-    () =>
-      groupPointMapEditorMarkers(
-        visiblePoints
-          .filter((point) => point.placed)
-          .map((point) =>
-            dragPreview?.pointId === point.id
-              ? { ...point, ...dragPreview.position }
-              : point,
-          ),
-        editorGeometry,
-        zoom,
-        draggingPointId ?? activePointId,
-      ),
-    [visiblePoints, editorGeometry, zoom, draggingPointId, activePointId, dragPreview],
-  );
-  const individualMarkerIds = React.useMemo(
-    () =>
-      new Set(
-        markerGroups
-          .filter((group) => group.pointIds.length === 1)
-          .flatMap((group) => group.pointIds),
-      ),
-    [markerGroups],
-  );
-  const overlapPoints = React.useMemo(
-    () =>
-      overlapPointIds
-        ? visiblePoints.filter((point) => overlapPointIds.includes(point.id))
-        : [],
-    [visiblePoints, overlapPointIds],
-  );
   const markerTransform = `translate(-50%, -50%) scale(${editorGeometry.markerScale / zoom})`;
   function focusDrawing(points: Array<{ x: number; y: number }>) {
     const camera = focusPointMapEditorView(editorGeometry, points, viewportSize, zoom);
@@ -464,7 +453,6 @@ export function PointMapWorkbench({
 
   const resetViewport = React.useCallback(() => {
     setZoom(1);
-    setOverlapPointIds(null);
     setPan({ x: 0, y: 0 });
     setNaturalSize({ width: 1, height: 1, source: "" });
     setDragPreview(null);
@@ -477,28 +465,6 @@ export function PointMapWorkbench({
     setPointEditorId(null);
   }, []);
 
-  // 全屏编辑：让画布真正占满窗口，而不是挤在固定高度里。
-  React.useEffect(() => {
-    const onChange = () =>
-      setFullscreen(document.fullscreenElement === editorCardRef.current);
-    document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
-  }, []);
-  const toggleFullscreen = React.useCallback(() => {
-    if (typeof document === "undefined") return;
-    if (document.fullscreenElement) {
-      void document.exitFullscreen().catch(() => {});
-      return;
-    }
-    const element = editorCardRef.current;
-    if (!element || typeof element.requestFullscreen !== "function") {
-      setMessage("当前浏览器不支持全屏编辑，可先收起侧边栏再使用。");
-      return;
-    }
-    void element.requestFullscreen().catch(() => {
-      setMessage("浏览器拒绝了全屏请求，可先收起侧边栏再使用。");
-    });
-  }, []);
 
   const selectProject = React.useCallback(
     (projectId: string) => {
@@ -666,7 +632,7 @@ export function PointMapWorkbench({
     };
   }, [selectedProjectId, selectedPropertyType, isVilla, resetViewport]);
 
-  React.useEffect(() => {
+  useBrowserLayoutEffect(() => {
     const element = viewportRef.current;
     if (!element) return;
     const resize = () =>
@@ -681,13 +647,91 @@ export function PointMapWorkbench({
   }, []);
 
 
-  function savePlan(nextPlan: PointMapPlan) {
-    if (editingDisabledRef.current) return;
+  /**
+   * 撤销 / 重做。
+   *
+   * 做法故意最笨：每次改动前把整份方案复制一份压进栈（上限 50 步），撤销就弹出、重做就压回。
+   * 不算 diff —— 方案不大，快照最不容易错，也不会和保存/冲突那套语义打架。
+   * 600 毫秒内的连续改动合并成一步（比如连着敲楼层名），否则撤销要点几十次。
+   */
+  const HISTORY_LIMIT = 50;
+  const HISTORY_MERGE_MS = 600;
+  const historyRef = React.useRef<{ plan: PointMapPlan; at: number }[]>([]);
+  const redoRef = React.useRef<PointMapPlan[]>([]);
+  const [historyDepth, setHistoryDepth] = React.useState(0);
+  const [redoDepth, setRedoDepth] = React.useState(0);
+
+  function syncHistoryDepth() {
+    setHistoryDepth(historyRef.current.length);
+    setRedoDepth(redoRef.current.length);
+  }
+
+  /** 把「改动之前」的这一版存起来。连续操作会合并，不重复压栈。 */
+  function pushHistory() {
+    // pushHistory 只从 savePlan 进来（用户操作 / 数据加载后），不会在渲染期执行；
+    // 这里要的是「这次操作发生在什么时候」，用 Date.now 是唯一合适的选择。
+    // eslint-disable-next-line react-hooks/purity -- 事件路径专用，非渲染期
+    const now = Date.now();
+    const last = historyRef.current[historyRef.current.length - 1];
+    if (last && now - last.at < HISTORY_MERGE_MS) {
+      last.at = now;
+      return;
+    }
+    historyRef.current.push({ plan: planRef.current, at: now });
+    if (historyRef.current.length > HISTORY_LIMIT) historyRef.current.shift();
+    redoRef.current = [];
+    syncHistoryDepth();
+  }
+
+  /** 真正把一份方案落到状态里（保存和撤销/重做共用这一条路）。 */
+  function applyPlanDirect(nextPlan: PointMapPlan) {
     const next = normalizeDesignPlan(nextPlan);
     planRef.current = next;
     setPlan(next);
     setDirty(true);
     void persistLocal(next);
+  }
+
+  function undoPlan() {
+    if (editingDisabledRef.current) return;
+    const entry = historyRef.current.pop();
+    if (!entry) return;
+    redoRef.current.push(planRef.current);
+    applyPlanDirect(entry.plan);
+    syncHistoryDepth();
+  }
+
+  function redoPlan() {
+    if (editingDisabledRef.current) return;
+    const next = redoRef.current.pop();
+    if (!next) return;
+    historyRef.current.push({ plan: planRef.current, at: 0 });
+    applyPlanDirect(next);
+    syncHistoryDepth();
+  }
+
+  // 渲染期不能写 ref，放到每次渲染后的 effect 里同步最新引用（键盘监听永远拿得到最新的撤销函数）。
+  React.useEffect(() => {
+    historyActionsRef.current = { undo: undoPlan, redo: redoPlan };
+  });
+  React.useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "z") return;
+      const el = event.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || el?.isContentEditable) return;
+      event.preventDefault();
+      if (event.shiftKey) historyActionsRef.current.redo();
+      else historyActionsRef.current.undo();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  function savePlan(nextPlan: PointMapPlan) {
+    if (editingDisabledRef.current) return;
+    pushHistory();
+    applyPlanDirect(nextPlan);
   }
 
   function updatePlan(patch: Partial<PointMapPlan>) {
@@ -696,6 +740,7 @@ export function PointMapWorkbench({
 
   function selectFloor(floorId: string) {
     const next = normalizeDesignPlan({ ...plan, activeFloorId: floorId });
+    planRef.current = next;
     setPlan(next);
     persistLocal(next);
     setActivePointId(null);
@@ -834,19 +879,25 @@ export function PointMapWorkbench({
         return;
       }
       const next = await applyPointMapFloorplanCrop(before, targetFloor, source, result.crop, result.image);
-      if (planRef.current !== before || projectRef.current !== before.projectId || editingDisabledRef.current)
-        throw new Error("整理期间草稿已变化，请在当前草稿上重试。");
-      localBackupsRef.current.set(before.projectId, before);
-      setHasBackup(true);
-      let backupStored = false;
-      try {
-        await pointMapLocalStore().write(before, true);
-        backupStored = true;
-      } catch { /* In-memory backup remains exportable until this page closes. */ }
-      savePlan(next);
+      const backupStored = await commitPointMapFloorplanCrop({
+        before,
+        next,
+        floorId: targetFloor,
+        source,
+        current: () => ({ plan: planRef.current, projectId: projectRef.current, editingDisabled: editingDisabledRef.current }),
+        backup: async () => {
+          localBackupsRef.current.set(before.projectId, before);
+          setHasBackup(true);
+          try {
+            await pointMapLocalStore().write(before, true);
+            return true;
+          } catch { return false; /* Keep the in-memory backup available for download. */ }
+        },
+        apply: savePlan,
+      });
       resetViewport();
       const removed = Math.round((1 - result.crop.width * result.crop.height / (floor.imageWidth * floor.imageHeight)) * 100);
-      setMessage(`已裁去约 ${removed}% 外围空纸，保留 3% 安全边距。点位、CAD 与风格校准已同步；${backupStored ? "原稿可通过“导出本机备份”取回。" : "原稿备份仅在当前页面有效，请在关闭前点击“导出本机备份”下载。"}当前仅本机草稿，请保存到数据库。`);
+      setMessage(`已裁去约 ${removed}% 外围空纸，保留 3% 安全边距。点位、CAD 与风格校准已同步；${backupStored ? "原稿可通过“导出本机备份”取回。" : "原稿备份仅在当前页面有效，请在关闭前点击“导出本机备份”下载。"}当前仅本机草稿，请保存草稿。`);
     } catch (error) {
       if (projectRef.current === before.projectId) setMessage(`${errorMessage(error)} 未应用本次裁切。`);
     } finally {
@@ -1424,10 +1475,12 @@ export function PointMapWorkbench({
         ? "正在连接云端"
         : cloudState === "offline"
           ? "离线 · 仅本机草稿"
+          // 徽章只放最短的状态词：长了会把页头挤成两行，整页高度就跟着变。
+          // 详细说明在「处理冲突」弹窗和徽章的悬停提示里。
           : cloudState === "conflict"
-            ? "云端冲突 · 本机修改保留"
+            ? "云端冲突"
             : cloudState === "forbidden"
-              ? "当前只读 · 无编辑权限"
+              ? "只读"
               : dirty
                 ? "本机有修改 · 尚未保存云端"
                 : cloudRevision
@@ -1435,7 +1488,7 @@ export function PointMapWorkbench({
                   : "仅本机草稿 · 云端尚未保存";
 
   const editorSaveStatus = busy
-    ? "正在保存到数据库…"
+    ? "正在保存草稿…"
     : cloudState === "loading"
       ? "正在读取数据库…"
       : pointMapSaveError
@@ -1443,121 +1496,113 @@ export function PointMapWorkbench({
         : readOnly || cloudState === "forbidden"
           ? "当前只读，无法保存修改。"
           : cloudState === "conflict"
-            ? "数据库版本冲突：可「以本机为准保存」，或「加载云端草稿」放弃本机修改。"
+            ? "云端和本机不一致：点页头的「云端冲突」选择要保留哪一份。"
             : cloudState === "offline"
               ? "数据库暂不可用，修改仍在当前页面中。"
               : dirty
                 ? "有修改待保存"
                 : cloudRevision
-                  ? `数据库已保存 r${cloudRevision}`
-                  : "尚未保存到数据库";
+                  ? `云端已保存 r${cloudRevision}`
+                  : "尚未保存草稿";
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">点位图工作台</h1>
-          <p className="text-sm text-muted-foreground">
-            导入助手分析草稿，按楼层微调点位、控制灯组和场景，再保存草稿、核对报价并生成客户方案。
-          </p>
-        </div>
+    <section className="flex min-h-0 flex-1 flex-col gap-2">
+      {/*
+        顶栏压成一行：页面名、视图切换、保存状态、说明入口，然后才是动作按钮。
+        原来这里是「大标题 + 副标题」一块加「状态卡片」一块，在 1366×768 上
+        合计占掉约 148 像素 —— 而这些高度本该归画布。
+      */}
+      {/* 顶栏只有一行：项目、楼层、视图切换，右边撤销/重做/保存。 */}
+      <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-2 lg:h-10 lg:flex-nowrap lg:overflow-hidden">
+          {showFloorControls ? (<>
+            <Layers className="size-4 shrink-0 text-muted-foreground" />
+            <Select value={floor?.id ?? ""} onValueChange={selectFloor}>
+              <SelectTrigger className="h-8 w-36" aria-label={selectedPropertyType === "flat" ? "当前图纸" : "当前楼层"}><SelectValue placeholder={selectedPropertyType === "flat" ? "选择图纸" : "选择楼层"} /></SelectTrigger>
+              <SelectContent>{floors.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </>) : null}
+          <span className="hidden text-xs text-muted-foreground 2xl:inline">
+            {floor?.floorplanName || "未上传底图"}
+            {floor?.imageWidth ? ` · ${floor.imageWidth} × ${floor.imageHeight}` : ""}
+          </span>
+        <h1 className="sr-only">点位图工作台</h1>
         {selectedProjectId ? <ProjectViewSwitch
           active="point-map"
           projectId={selectedProjectId}
           hasUnsavedChanges={() => dirty}
           onSave={() => saveCloud()}
         /> : null}
-      </div>
-
-      <Card>
-        <CardContent className="flex flex-wrap items-center gap-2 p-3">
+        {/* 窄屏放不下那行状态文字，把它挂到徽章上，鼠标停一下就能看到。 */}
+        {cloudState === "conflict" ? (
+          // 冲突就点这个徽章处理。不额外加按钮 —— 多一个按钮会把页头挤成两行，
+          // 整页高度跟着变 32 像素，看起来又是「跳一下」。
+          <button
+            type="button"
+            onClick={() => setConflictOpen(true)}
+            disabled={busy || uploading || !selectedProjectId}
+            title={message || "本机草稿和云端不一样，点这里处理"}
+            className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+          >
+            <Badge variant="destructive" className="cursor-pointer">
+              云端冲突 · 点此处理
+            </Badge>
+          </button>
+        ) : (
           <Badge
-            variant={
-              cloudState === "conflict" || cloudState === "forbidden"
-                ? "destructive"
-                : "secondary"
-            }
+            title={message}
+            variant={cloudState === "forbidden" ? "destructive" : "secondary"}
           >
             {cloudLabel}
           </Badge>
+        )}
           {readOnly && <Badge variant="outline">订阅或项目权限只读</Badge>}
           {!localStored && (
             <Badge variant={!dirty && cloudRevision ? "secondary" : "destructive"}>{!dirty && cloudRevision ? "本机缓存不可用 · 已保存数据库" : "本机缓存不可用 · 请保存云端或导出"}</Badge>
           )}
-          <span className="mr-auto text-xs text-muted-foreground">
-            {localStored ? "编辑自动保存在本机；云端保存需点击按钮。" : "本机缓存不可用，修改后请及时保存到云端。"}
-            {cloudPlan
-              ? ` 云端 r${cloudRevision} 共 ${cloudPlan.points.length} 个点位。`
-              : ""}
-          </span>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setRoomsOpen(true)}
-            disabled={!selectedProjectId}
+          <p
+            role="status"
+            aria-live="polite"
+            className="hidden max-w-[11rem] truncate text-xs text-muted-foreground 2xl:block"
+            title={message}
           >
-            房间进度
-            <Badge variant="secondary" className="ml-1">
-              {floorPoints.filter((point) => point.status === "confirmed").length}/
-              {floorPoints.length}
-            </Badge>
-          </Button>
+            {message}
+          </p>
+          <span className="mr-auto" />
+          {/* 「房间进度」「点位清单」这些数字右栏已经有了，点那里的统计就能进 —— 页头不再重复放。 */}
           <Button
-            size="sm"
+            size="icon"
             variant="outline"
-            onClick={() => setPointsOpen(true)}
-            disabled={!selectedProjectId}
+            className="size-8"
+            aria-label="撤销"
+            title="撤销（⌘Z）"
+            onClick={undoPlan}
+            disabled={historyDepth === 0 || editingDisabled}
           >
-            点位清单
-            <Badge variant="secondary" className="ml-1">
-              {visiblePoints.length}
-            </Badge>
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setSceneOpen(true)}
-            disabled={!selectedProjectId}
-          >
-            场景与联动
-            {(plan.scenes?.length ?? 0) > 0 && (
-              <Badge variant="secondary" className="ml-1">
-                {plan.scenes?.length}
-              </Badge>
-            )}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setUnplacedOpen(true)}
-            disabled={!selectedProjectId || !unplacedPoints.length}
-            title="未定位点位不在画布上显示，从这里定位"
-          >
-            <MapPin className="size-4" />
-            待定位
-            {unplacedPoints.length > 0 && (
-              <Badge variant="destructive" className="ml-1">
-                {unplacedPoints.length}
-              </Badge>
-            )}
+            <Undo2 className="size-4" />
           </Button>
           <Button
             size="icon"
             variant="outline"
             className="size-8"
-            aria-label={fullscreen ? "退出全屏编辑" : "全屏编辑"}
-            title={fullscreen ? "退出全屏编辑" : "全屏编辑"}
-            onClick={toggleFullscreen}
+            aria-label="重做"
+            title="重做（⌘⇧Z）"
+            onClick={redoPlan}
+            disabled={redoDepth === 0 || editingDisabled}
           >
-            {fullscreen ? (
-              <Minimize2 className="size-4" />
-            ) : (
-              <Maximize2 className="size-4" />
-            )}
+            <Redo2 className="size-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="outline"
+            className="size-8"
+            aria-label="更多工具"
+            title="更多工具：AI 生成点位 / 备份导出 / 底图与 CAD"
+            onClick={() => setMoreOpen(true)}
+          >
+            <MoreHorizontal className="size-4" />
           </Button>
           <Button
             size="sm"
-            variant="outline"
             onClick={() => saveCloud()}
             disabled={
               editingDisabled ||
@@ -1570,26 +1615,80 @@ export function PointMapWorkbench({
             <Save className="size-4" />
             保存草稿
           </Button>
-          {cloudState === "conflict" && (
+      </div>
+      <div role="group" aria-label="点位复核与场景" className="grid shrink-0 grid-cols-4 gap-1 lg:hidden">
+        <Button size="sm" variant="outline" className="px-1 text-xs" disabled={!selectedProjectId} onClick={() => setPointsOpen(true)}>
+          点位清单 {floorPoints.length}
+        </Button>
+        <Button size="sm" variant="outline" className="px-1 text-xs" disabled={!selectedProjectId} onClick={() => setRoomsOpen(true)}>
+          房间进度
+        </Button>
+        <Button size="sm" variant="outline" className="px-1 text-xs" disabled={!selectedProjectId || unplacedPoints.length === 0} onClick={() => setUnplacedOpen(true)}>
+          待定位 {unplacedPoints.length}
+        </Button>
+        <Button size="sm" variant="outline" className="px-1 text-xs" disabled={!selectedProjectId} onClick={() => setSceneOpen(true)}>
+          场景与联动
+        </Button>
+      </div>
+      {pointMapSaveError && (
+        <p role="alert" className="text-xs leading-5 text-destructive">
+          保存失败：{pointMapSaveError}
+        </p>
+      )}
+
+      {/*
+        冲突的处理入口：一个弹窗两个选择，不靠展开面板 ——
+        展开面板会改页面高度，弹窗不会。
+      */}
+      <Dialog
+        open={conflictOpen}
+        onOpenChange={(open) => {
+          if (!open && !busy) setConflictOpen(false);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>本机草稿和云端不一样</DialogTitle>
+            <DialogDescription>
+              工作台里有一份没保存到云端的修改，云端也有另一版。先选一种方式继续，就不会一直卡在冲突上。
+            </DialogDescription>
+          </DialogHeader>
+          {cloudPlan ? (
+            <p className="text-xs text-muted-foreground">
+              云端当前 r{cloudRevision}，共 {cloudPlan.points.length} 个点位。
+            </p>
+          ) : null}
+          <DialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
             <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => setOverrideOpen(true)}
-              disabled={busy || uploading || !selectedProjectId}
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={busy || uploading}
+              onClick={() => {
+                setConflictOpen(false);
+                loadCloud();
+              }}
             >
-              以本机为准保存
+              加载云端草稿（放弃本机修改）
             </Button>
-          )}
-        </CardContent>
-        {pointMapSaveError && (
-          <p
-            role="alert"
-            className="border-t px-3 py-2 text-xs leading-5 text-destructive"
-          >
-            保存失败：{pointMapSaveError}
-          </p>
-        )}
-      </Card>
+            <Button
+              type="button"
+              variant="destructive"
+              className="w-full"
+              disabled={busy || uploading}
+              onClick={() => {
+                setConflictOpen(false);
+                setOverrideOpen(true);
+              }}
+            >
+              以本机为准保存（覆盖云端）
+            </Button>
+            <Button type="button" variant="ghost" className="w-full" onClick={() => setConflictOpen(false)}>
+              先不处理
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={overrideOpen}
@@ -1629,364 +1728,39 @@ export function PointMapWorkbench({
         </DialogContent>
       </Dialog>
 
-      <details className="rounded-xl border bg-card p-3" open={!hasPlanContent(plan) || cloudState === "conflict"}>
-        <summary className="cursor-pointer text-sm font-medium">高级工具 · 助手导入、CAD、底图与版本恢复</summary>
-        <div className="mt-3 space-y-3">
-          <p className="text-xs text-muted-foreground">草稿 PNG 使用当前编辑位置与已保存报价，仅用于检查。客户 PNG 与 PDF 请从“客户交付”生成固定版本后导出。</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" variant="outline" onClick={exportJson} disabled={uploading || (!plan.points.length && !hasPlanContent(plan))}><Download className="size-4" />导出草稿 JSON</Button>
-            <Button size="sm" variant="outline" onClick={exportPng} disabled={uploading || !floor?.floorplanDataUrl}><Download className="size-4" />草稿检查 PNG</Button>
-            <Button size="sm" variant="outline" onClick={compactFloorplan} disabled={editingDisabled || uploading || !floor?.floorplanDataUrl}>整理底图留白</Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={loadCloud}
-            disabled={busy || uploading || !selectedProjectId}
-          >
-            加载云端草稿
-          </Button>
-          {hasBackup && (
-            <Button size="sm" variant="outline" onClick={exportLocalBackup}>
-              导出本机备份
-            </Button>
-          )}
-          </div>
-      <PointMapPresentationPanel
-        plan={plan}
-        saved={cloudRevision !== null && !dirty}
-        disabled={editingDisabled || uploading}
-        onApply={(next, expected) => {
-          if (planRef.current !== expected || next.projectId !== projectRef.current || editingDisabledRef.current || pendingUploadsRef.current > 0) return false;
-          savePlan(next);
-          planRef.current = normalizeDesignPlan(next);
-          return true;
-        }}
-      />
 
-      <details className="rounded-xl border bg-card p-3">
-        <summary className="cursor-pointer text-sm font-medium">
-          从 CAD 导入生成点位
-        </summary>
-        <div className="mt-3 space-y-3">
-          <p className="text-sm text-muted-foreground">
-            上传原始 DWG / DXF，由本实例服务端调用 CAD 导入服务，按图纸窗口生成干净底图与待复核点位。
-            需要先在服务端配置 <code className="text-xs">CAD_IMPORT_SERVICE_URL</code> 与{" "}
-            <code className="text-xs">CAD_IMPORT_SERVICE_TOKEN</code>；令牌不会进入浏览器。
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label htmlFor="cad-space">原图布局名（可选）</Label>
-              <Input
-                id="cad-space"
-                value={cadSpace}
-                disabled={editingDisabled || cadBusy}
-                onChange={(event) => setCadSpace(event.target.value)}
-                placeholder="例如 平面图；留空则导出全部布局"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="cad-floor">楼层名</Label>
-              <Input
-                id="cad-floor"
-                value={cadFloorName}
-                disabled={editingDisabled || cadBusy}
-                onChange={(event) => setCadFloorName(event.target.value)}
-                placeholder="一层"
-              />
-            </div>
-          </div>
-          <Input
-            id="cad-file"
-            type="file"
-            accept=".dwg,.dxf"
-            disabled={editingDisabled || cadBusy}
-            onChange={(event) => {
-              const file = event.target.files?.[0] ?? null;
-              event.target.value = "";
-              void importCadFile(file);
-            }}
-          />
-          <p className="text-xs text-muted-foreground">
-            {cadBusy
-              ? "正在处理：解码图纸、按窗口渲染底图与参考图、提取点位，可能需要几分钟…"
-              : "生成的点位是待复核状态，不会自动确认，也不改报价或固定交付版本。"}
-          </p>
-        </div>
-      </details>
-
-      <details className="rounded-xl border bg-card p-3">
-        <summary className="cursor-pointer text-sm font-medium">
-          导入助手点位草稿
-        </summary>
-        <div className="mt-3 grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_280px]">
-          <div className="min-w-0 space-y-2">
-            <Label htmlFor="point-map-draft">点位 JSON</Label>
-            <Textarea
-              id="point-map-draft"
-              className="field-sizing-fixed min-h-32 min-w-0 max-w-full font-mono text-xs"
-              value={draftText}
-              disabled={editingDisabled}
-              onChange={(event) => {
-                setDraftText(event.target.value);
-                setDraftPreview(null);
-                setDraftError("");
-              }}
-              placeholder="粘贴助手提供的 fmkj-point-map-draft JSON，先校验预览，再确认预摆。"
-            />
-            <div className="flex flex-wrap gap-2">
-              <JsonDraftUpload
-                disabled={editingDisabled}
-                onUpload={importDraftFile}
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={previewDraft}
-                disabled={editingDisabled || !draftText.trim()}
-              >
-                校验并预览
-              </Button>
-            </div>
-            {draftError && (
-              <p role="alert" className="text-sm text-destructive">
-                {draftError}
-              </p>
-            )}
-          </div>
-          <div className="rounded-lg bg-muted/40 p-3 text-sm">
-            {draftPreview ? (
-              <div className="space-y-2">
-                <p className="font-medium">校验通过，当前图纸尚未改动</p>
-                <p>
-                  {draftPreview.floors.length} 个楼层 ·{" "}
-                  {draftPreview.points.length} 个点位 ·{" "}
-                  {draftPreview.scenes.length} 个场景
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {draftPreview.floors.map((item) => item.name).join("、")}
-                  。相同 ID 保留已有微调；新导入点位和场景需要复核。
-                </p>
-                {draftPreview.points.some(
-                  (point) =>
-                    point.productId &&
-                    !products.some((product) => product.id === point.productId),
-                ) && (
-                  <p className="text-xs text-destructive">
-                    有产品建议未匹配当前产品库，导入后请重新选型。
-                  </p>
-                )}
-                <Button
-                  size="sm"
-                  onClick={applyDraft}
-                  disabled={editingDisabled}
-                >
-                  确认预摆点位
-                </Button>
-              </div>
-            ) : (
-              <p className="text-xs leading-6 text-muted-foreground">
-                在助手聊天中分析清晰平面图、开关图，取得点位草稿后导入。
-                楼层底图可以在导入后逐层上传。
-              </p>
-            )}
-          </div>
-        </div>
-      </details>
-
-      <PointMapCadPanel
-        key={`${selectedProjectId}:${floor?.id ?? ""}`}
-        plan={plan}
-        floor={floor}
-        projectName={selectedProject.name}
-        editingDisabled={editingDisabled}
-        uploading={uploading}
-        getCurrentContext={() => ({
-          plan: planRef.current,
-          projectId: projectRef.current,
-          floorId: activePointMapFloor(planRef.current)?.id,
-          editingDisabled: editingDisabledRef.current,
-          uploading: pendingUploadsRef.current > 0,
-        })}
-        onApply={(next, expected) => {
-          if (
-            planRef.current !== expected ||
-            next.projectId !== projectRef.current ||
-            editingDisabledRef.current ||
-            pendingUploadsRef.current > 0
-          )
-            return false;
-          savePlan(next);
-          planRef.current = normalizeDesignPlan(next);
-          return true;
-        }}
-      />
-        </div>
-      </details>
-
-      <Card
-        ref={editorCardRef}
-        className="flex min-h-0 flex-1 flex-col overflow-hidden"
+      <div
+        className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden"
       >
-        <CardHeader className="gap-3 p-3 md:p-4">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <MapPinned className="size-4" />
-                图纸标点
-              </CardTitle>
-              <CardDescription
-                className="mt-1 text-xs"
-                role="status"
-                aria-live="polite"
-              >
-                {message}
-              </CardDescription>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <ProjectSelect
-                disabled={busy || uploading}
-                projects={projects}
-                value={selectedProjectId}
-                onChange={selectProject}
-              />
-              <FloorplanUpload
-                disabled={editingDisabled || uploading}
-                onUpload={uploadFloorplan}
-              />
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {showFloorControls ? (<>
-              <Layers className="size-4 text-muted-foreground" />
-              <Select value={floor?.id ?? ""} onValueChange={selectFloor}>
-                <SelectTrigger className="h-8 w-40" aria-label={selectedPropertyType === "flat" ? "当前图纸" : "当前楼层"}><SelectValue placeholder={selectedPropertyType === "flat" ? "选择图纸" : "选择楼层"} /></SelectTrigger>
-                <SelectContent>{floors.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
-              </Select>
-              <Input className="h-8 w-32" aria-label={selectedPropertyType === "flat" ? "图纸名称" : "楼层名称"} value={floor?.name ?? ""} onChange={(event) => patchFloor({ name: event.target.value })} disabled={editingDisabled} />
-              <Button size="sm" variant="outline" onClick={addFloor} disabled={editingDisabled}><Plus className="size-4" />{selectedPropertyType === "flat" ? "添加图纸" : "添加楼层"}</Button>
-              <span className="mr-auto text-xs text-muted-foreground">{floor?.floorplanName || "当前楼层未上传底图"} {floor?.imageWidth ? `· ${floor.imageWidth} × ${floor.imageHeight}` : ""}</span>
-            </>) : <span className="mr-auto text-xs text-muted-foreground">平层 · 全屋房间 · {floor?.floorplanName || "未上传户型底图"}</span>}
-            <Button
-              size="sm"
-              variant={tool === "place" ? "secondary" : "ghost"}
-              aria-pressed={tool === "place"}
-              onClick={() => setTool("place")}
-              disabled={editingDisabled}
-            >
-              <MousePointer2 className="size-4" />
-              布点
-            </Button>
-            <Button
-              size="sm"
-              variant={tool === "pan" ? "secondary" : "ghost"}
-              aria-pressed={tool === "pan"}
-              onClick={() => setTool("pan")}
-            >
-              <Hand className="size-4" />
-              平移
-            </Button>
-            <Button
-              size="icon"
-              variant="outline"
-              className="size-8"
-              aria-label="缩小底图"
-              onClick={() => setZoom((value) => Math.max(0.5, value / 1.25))}
-            >
-              <ZoomOut className="size-4" />
-            </Button>
-            <span className="w-12 text-center text-xs tabular-nums">
-              {Math.round(zoom * 100)}%
-            </span>
-            <Button
-              size="icon"
-              variant="outline"
-              className="size-8"
-              aria-label="放大底图"
-              onClick={() => setZoom((value) => Math.min(POINT_MAP_MAX_EDITOR_ZOOM, value * 1.25))}
-            >
-              <ZoomIn className="size-4" />
-            </Button>
-            <Button
-              size="icon"
-              variant="outline"
-              className="size-8"
-              aria-label="查看全图"
-              onClick={() => {
-                setZoom(1);
-                setPan({ x: 0, y: 0 });
-              }}
-            >
-              <RotateCcw className="size-4" />
-            </Button>
-            <Button size="sm" variant="outline" disabled={!floor?.floorplanDataUrl} onClick={() => focusDrawing([floorPoints.find(point => point.id === activePointId && point.placed) ?? { x: 50, y: 50 }])}>
-              <MapPinned className="size-4" />局部布点
-            </Button>
-          </div>
-          <Toolbar
-            disabled={editingDisabled}
-            products={compatibleProducts}
-            selectedProductId={selectedProductId}
-            selectedRoom={selectedRoom}
-            roomOptions={availableRooms}
-            onProductChange={setSelectedProductId}
-            onRoomChange={setSelectedRoom}
-          />
-        </CardHeader>
-        <CardContent className="flex min-h-0 flex-1 flex-col gap-3 p-2 pt-0 md:p-3 md:pt-0">
-          <PointMapDrawings plan={plan} floor={floor} view={drawingView} disabled={editingDisabled || uploading} onSelect={setDrawingView} onApply={(next, expected) => {
-            if (planRef.current !== expected || next.projectId !== projectRef.current || editingDisabledRef.current || pendingUploadsRef.current > 0) return false;
-            savePlan(next);
-            return true;
-          }} />
-          <div className="grid min-h-0 flex-1 gap-2 lg:grid-cols-[148px_minmax(0,1fr)] 2xl:grid-cols-[194px_minmax(0,1fr)]">
-            <IconPalette
-              disabled={editingDisabled}
-              selectedIconId={selectedIconId}
-              onDragEnd={() => setDraggingIconId(null)}
-              onDragStart={setDraggingIconId}
-              onIconChange={selectIcon}
-            />
-            <div className="flex min-h-0 min-w-0 flex-col gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={query}
-                    aria-label="搜索当前楼层点位"
-                    onChange={(event) => setQuery(event.target.value)}
-                    className="h-8 w-48 pl-9"
-                    placeholder="搜索编号、房间、产品、灯组"
-                  />
-                </div>
-                <Select
-                  value={roomFilter ?? FILTER_ALL_ROOMS}
-                  onValueChange={(value) =>
-                    setRoomFilter(value === FILTER_ALL_ROOMS ? null : value)
-                  }
-                >
-                  <SelectTrigger className="h-8 w-36" aria-label="按房间筛选点位">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={FILTER_ALL_ROOMS}>全部房间</SelectItem>
-                    {filterRoomOptions.map((room) => (
-                      <SelectItem key={room} value={room}>
-                        {room}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <span className="text-xs text-muted-foreground">
-                  当前楼层 {visiblePoints.length}/{floorPoints.length} 个点位
-                </span>
-              </div>
+        {/*
+          一条工具栏装下「选项目 / 传底图 / 选楼层 / 放点设置」。
+          原来的卡片标题「图纸标点」和页头重复，连同三行 CardHeader 一起去掉；
+          画布自己的控制（搜索、房间筛选、布点/平移、缩放）改成浮在画布上。
+        */}
+        {/*
+          这一行原来会随内容换行：数据没回来时挤成两行 92px，数据回来后一行 52px，
+          画布高度跟着变 40px —— 这就是「跳一下然后变小」。现在钉成 40px、禁止换行，
+          无论数据什么时候到，这一行的高度都不再变化。
+        */}
+        <div className="flex min-h-0 flex-1 flex-col gap-2">
+          {/*
+            三栏：设备图标 / 画布 / 点位属性。
+            属性栏是常驻的 —— 选中/取消选中都不改变列宽，所以图纸永远不会因为编辑而变大变小。
+          */}
+          <div className="grid min-h-0 flex-1 gap-2 lg:grid-cols-[minmax(0,1fr)_20rem] 2xl:grid-cols-[minmax(0,1fr)_21rem]">
+            {/*
+              画布占满这一格，搜索、房间筛选、布点模式与缩放都浮在画布上。
+              这几行原来单独占位，合计约 80 像素，现在全部还给画布。
+            */}
+            {/* 画布有最小高度：窗口再矮也不会被压成一张看不清的图，放不下就让页面滚动。 */}
+            <div className="relative min-h-[22rem] min-w-0">
               <div
                 ref={viewportRef}
                 role="region"
                 aria-label="点位图画布"
                 data-point-viewport
                 className={cn(
-                  "relative min-h-[26rem] flex-1 overflow-hidden rounded-lg border bg-muted/30 touch-none",
+                  "absolute inset-0 overflow-hidden rounded-lg bg-muted touch-none",
                   tool === "pan" && "cursor-grab active:cursor-grabbing",
                 )}
                 onPointerDown={beginPan}
@@ -2039,7 +1813,7 @@ export function PointMapWorkbench({
                     }
                   />)}
                   {(drawingView === "layout" || activeReference) && visiblePoints
-                    .filter((point) => point.placed && individualMarkerIds.has(point.id))
+                    .filter((point) => point.placed)
                     .map((point) => {
                       const icon = iconForPoint(point);
                       const position =
@@ -2156,12 +1930,6 @@ export function PointMapWorkbench({
                         </button>
                       );
                     })}
-                  {(drawingView === "layout" || activeReference) && markerGroups.filter(group => group.pointIds.length > 1).map(group => {
-                    return <button key={group.id} type="button" data-point-node data-point-group aria-label={`${group.pointIds.length} 个相邻点位，点击逐个选择`} className="absolute z-20 flex items-center justify-center rounded-md border border-slate-300 bg-white shadow-sm" style={{ left: `${group.x}%`, top: `${group.y}%`, width: POINT_MAP_EDITOR_HIT_SIZE, height: POINT_MAP_EDITOR_HIT_SIZE, transform: markerTransform }} onPointerDown={event => { if (tool !== "pan") event.stopPropagation(); }} onClick={event => { event.stopPropagation(); if (tool !== "pan") setOverlapPointIds(group.pointIds); }}>
-                      <Layers className="size-6 text-slate-700" aria-hidden="true" />
-                      <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-slate-800 px-1 text-center text-xs font-semibold leading-5 text-white">{group.pointIds.length}</span>
-                    </button>;
-                  })}
                 </div>
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center">
@@ -2171,20 +1939,312 @@ export function PointMapWorkbench({
                       为 {floor?.name || "当前楼层"} 上传底图
                     </div>
                     <div className="mt-1 text-sm text-muted-foreground">
-                      支持 PNG、JPG、WebP。DWG 先用 CADCraft 导出全部图纸对照，确认采用的方案后再提取净底；也可导入助手整理的点位草稿。
+                      支持 PNG、JPG、WebP。也可以点顶栏的「⋯ 更多工具」，用 CAD 原图或助手给的草稿批量生成待复核点位。
                     </div>
                   </div>
                 </div>
               )}
+
+              {/* 浮层随画布宽度换行，避免窄屏的模式按钮盖住搜索和房间筛选。 */}
+              <div
+                className="absolute inset-x-2 top-2 z-30 flex flex-wrap items-start justify-between gap-2"
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+              <div
+                className="flex flex-wrap items-center gap-1.5 rounded-md border bg-card/95 p-1.5 shadow-sm backdrop-blur"
+              >
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={query}
+                    aria-label="搜索当前楼层点位"
+                    onChange={(event) => setQuery(event.target.value)}
+                    className="h-8 w-44 pl-8"
+                    placeholder="搜索点位"
+                  />
+                </div>
+                <Select
+                  value={roomFilter ?? FILTER_ALL_ROOMS}
+                  onValueChange={(value) =>
+                    setRoomFilter(value === FILTER_ALL_ROOMS ? null : value)
+                  }
+                >
+                  <SelectTrigger className="h-8 w-32" aria-label="按房间筛选点位">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={FILTER_ALL_ROOMS}>全部房间</SelectItem>
+                    {filterRoomOptions.map((room) => (
+                      <SelectItem key={room} value={room}>
+                        {room}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/*
+                画布控制分两处放，避免一整条横条盖住底图右下角（那里通常也是房间）。
+                模式切换在上、缩放竖排在下，都只占一个很小的角。
+              */}
+              <div
+                role="group"
+                aria-label="画布模式"
+                className="ml-auto flex items-center gap-0.5 rounded-md border bg-card/95 p-1 shadow-sm backdrop-blur"
+              >
+                <Button
+                  size="sm"
+                  variant={tool === "place" ? "secondary" : "ghost"}
+                  aria-pressed={tool === "place"}
+                  onClick={() => setTool("place")}
+                  disabled={editingDisabled}
+                >
+                  <MousePointer2 className="size-4" />
+                  布点
+                </Button>
+                <Button
+                  size="sm"
+                  variant={tool === "pan" ? "secondary" : "ghost"}
+                  aria-pressed={tool === "pan"}
+                  onClick={() => setTool("pan")}
+                >
+                  <Hand className="size-4" />
+                  平移
+                </Button>
+                <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={!floor?.floorplanDataUrl}
+                  title="把画面放大到选中点位"
+                  onClick={() => focusDrawing([floorPoints.find((point) => point.id === activePointId && point.placed) ?? { x: 50, y: 50 }])}
+                >
+                  <MapPinned className="size-4" />
+                  局部布点
+                </Button>
+              </div>
+              </div>
+
+              <div
+                role="group"
+                aria-label="画布缩放"
+                className="absolute bottom-2 right-2 z-30 flex flex-col items-center gap-0.5 rounded-md border bg-card/95 p-1 shadow-sm backdrop-blur"
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="放大底图"
+                  onClick={() => setZoom((value) => Math.min(POINT_MAP_MAX_EDITOR_ZOOM, value * 1.25))}
+                >
+                  <ZoomIn className="size-4" />
+                </Button>
+                <span className="py-0.5 text-xs tabular-nums">{Math.round(zoom * 100)}%</span>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="缩小底图"
+                  onClick={() => setZoom((value) => Math.max(0.5, value / 1.25))}
+                >
+                  <ZoomOut className="size-4" />
+                </Button>
+                <span className="my-0.5 h-px w-5 bg-border" aria-hidden="true" />
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="查看全图"
+                  title="回到全图"
+                  onClick={() => {
+                    setZoom(1);
+                    setPan({ x: 0, y: 0 });
+                  }}
+                >
+                  <RotateCcw className="size-4" />
+                </Button>
+              </div>
+
+              {/* 浮层：设备工具条。原来占左侧一整列 148px，现在浮在画布左下角，宽度全还给图纸。 */}
+              <div
+                className="absolute bottom-2 left-2 z-30 max-w-[calc(100%-5.5rem)] rounded-lg border bg-card/95 px-2 py-1.5 shadow-sm backdrop-blur"
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <IconPalette
+                    disabled={editingDisabled}
+                    selectedIconId={selectedIconId}
+                    onDragEnd={() => setDraggingIconId(null)}
+                    onDragStart={setDraggingIconId}
+                    onIconChange={selectIcon}
+                  />
+                  <span className="h-5 w-px bg-border" aria-hidden="true" />
+                  <div className="flex items-center gap-2">
+                    <Label className="shrink-0 text-xs text-muted-foreground" htmlFor="point-map-room">房间</Label>
+                    <Input id="point-map-room" list="point-map-room-options" className="h-8 w-28" title="房间名可自定义" value={selectedRoom} onChange={(event) => setSelectedRoom(event.target.value)} disabled={editingDisabled} />
+                    <datalist id="point-map-room-options">
+                      {availableRooms.map((room) => <option key={room} value={room} />)}
+                    </datalist>
+                  </div>
+                </div>
+              </div>
             </div>
             </div>
+
+            {/*
+              点位属性栏，常驻。选中或取消选中都不改变这一列的宽度 ——
+              所以图纸不会因为「打开/关闭编辑」而变大变小。
+            */}
+            <aside
+              aria-label="点位属性"
+              className="hidden min-h-0 flex-col overflow-hidden rounded-xl border bg-card lg:flex"
+            >
+              <div className="shrink-0 border-b px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-sm font-semibold">
+                    {editorPoint ? `编辑点位 · ${editorPoint.code || "点位"}` : "点位属性"}
+                  </span>
+                  {editorPoint ? (
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label="取消选择"
+                      title="取消选择"
+                      onClick={() => setPointEditorId(null)}
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  ) : null}
+                </div>
+                <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                  {editorPoint
+                    ? "点同类图标即可更换，改完记得保存草稿。"
+                    : "在图纸上点一个点位，属性显示在这里。"}
+                </p>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                {editorPoint ? (
+                  <PointEditor
+                    key={editorPoint.id}
+                    active
+                    point={editorPoint}
+                    products={products}
+                    roomOptions={availableRooms}
+                    onAddRoom={addFloorRoom}
+                    onActivate={() => setActivePointId(editorPoint.id)}
+                    onPatch={(patch) => patchPoint(editorPoint.id, patch)}
+                    onRemove={() => removePoint(editorPoint.id)}
+                    readOnly={editingDisabled}
+                  />
+                ) : (
+                  // 面板常驻就得有用：没选中点位时显示当前楼层的概览，而不是一块空白。
+                  <div className="space-y-3">
+                    {/* 页头不再有项目选择器了，这里用一行只读文字交代「你在哪个项目」，避免改错项目。 */}
+                    <div>
+                      <p className="text-xs text-muted-foreground">项目</p>
+                      <p className="mt-0.5 truncate text-sm font-medium" title={selectedProject.name}>
+                        {selectedProject.name}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">当前楼层</p>
+                      <p className="mt-0.5 text-sm font-medium">{floor?.name || "未选择"}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground" title={floor?.floorplanName}>
+                        {floor?.floorplanName || "未上传底图"}
+                      </p>
+                    </div>
+                    {/* 统计卡就是入口：数字在哪，入口就在哪，不用再去页头找按钮。 */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPointsOpen(true)}
+                        disabled={!selectedProjectId}
+                        className="rounded-lg bg-muted/50 px-2.5 py-2 text-left transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+                      >
+                        <span className="block text-xs text-muted-foreground">点位清单</span>
+                        <span className="mt-0.5 block text-sm font-semibold tabular-nums">
+                          {floorPoints.length}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRoomsOpen(true)}
+                        disabled={!selectedProjectId}
+                        className="rounded-lg bg-muted/50 px-2.5 py-2 text-left transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+                      >
+                        <span className="block text-xs text-muted-foreground">房间进度</span>
+                        <span className="mt-0.5 block text-sm font-semibold tabular-nums">
+                          {floorPoints.filter((point) => point.status === "confirmed").length}
+                          <span className="font-normal text-muted-foreground"> / {floorPoints.length}</span>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setUnplacedOpen(true)}
+                        disabled={!selectedProjectId || unplacedPoints.length === 0}
+                        className="rounded-lg bg-muted/50 px-2.5 py-2 text-left transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+                      >
+                        <span className="block text-xs text-muted-foreground">待定位</span>
+                        <span
+                          className={cn(
+                            "mt-0.5 block text-sm font-semibold tabular-nums",
+                            unplacedPoints.length > 0 && "text-destructive-strong",
+                          )}
+                        >
+                          {unplacedPoints.length}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSceneOpen(true)}
+                        disabled={!selectedProjectId}
+                        className="rounded-lg bg-muted/50 px-2.5 py-2 text-left transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+                      >
+                        <span className="block text-xs text-muted-foreground">场景与联动</span>
+                        <span className="mt-0.5 block text-sm font-semibold tabular-nums">
+                          {plan.scenes?.length ?? 0}
+                        </span>
+                      </button>
+                    </div>
+                    <p className="flex items-start gap-1.5 text-xs leading-5 text-muted-foreground">
+                      <MousePointer2 className="mt-0.5 size-3.5 shrink-0" />
+                      点画布上的任意点位开始编辑；这一栏常驻，图纸大小不会因为编辑而变。
+                    </p>
+                  </div>
+                )}
+              </div>
+              <div className="shrink-0 space-y-2 border-t p-3">
+                <p
+                  role="status"
+                  aria-live="polite"
+                  title={editorSaveStatus}
+                  className={cn(
+                    "line-clamp-2 text-xs leading-5 text-muted-foreground",
+                    pointMapSaveError && "text-destructive",
+                  )}
+                >
+                  {editorSaveStatus}
+                </p>
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={() => saveCloud()}
+                  disabled={
+                    !editorPoint ||
+                    editingDisabled ||
+                    uploading ||
+                    !selectedProjectId ||
+                    cloudRevision === null ||
+                    cloudState === "conflict"
+                  }
+                >
+                  <Save className="size-4" />
+                  保存草稿
+                </Button>
+              </div>
+            </aside>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            图标保持清晰大小，数量角标表示相邻点位，点开可逐个选择。局部布点可放大选中位置，拖动图标仍调整真实安装点；平移模式拖动画布。选中点位后可用方向键微调，Shift
-            + 方向键移动 2%。
-          </p>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {missingProducts.length > 0 && (
         <p
@@ -2195,85 +2255,296 @@ export function PointMapWorkbench({
           在当前产品库中不存在，请在点位详情重新关联。未匹配产品不会计入报价。
         </p>
       )}
-      <Dialog open={overlapPointIds !== null && overlapPoints.length > 0} onOpenChange={open => { if (!open) setOverlapPointIds(null); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>相邻点位 · {overlapPoints.length} 个</DialogTitle><DialogDescription>这些安装点靠得很近。逐个选择可定位并编辑，分组不会合并设备或改变坐标。</DialogDescription></DialogHeader>
-          <div className="max-h-80 space-y-2 overflow-y-auto">
-            {overlapPoints.map(point => <Button key={point.id} variant="outline" className="h-auto w-full justify-start gap-3 py-3 text-left" onClick={() => { setOverlapPointIds(null); setActivePointId(point.id); setPointEditorId(point.id); focusDrawing([point]); }}>
-              {/* eslint-disable-next-line @next/next/no-img-element -- Local device symbol in the point chooser. */}
-              <img src={iconForPoint(point).icon} alt="" className="size-8 shrink-0" /><span className="min-w-0"><span className="block">{point.code || "点位"} · {point.name}</span><span className="block text-xs font-normal text-muted-foreground">{point.room || "未分配房间"} · {iconForPoint(point).name}</span></span>
-            </Button>)}
-          </div>
-          <Button onClick={() => { focusDrawing(overlapPoints); setOverlapPointIds(null); }}>放大查看这一组</Button>
-        </DialogContent>
-      </Dialog>
-      <Dialog
-        open={Boolean(editorPoint)}
-        onOpenChange={(open) => {
-          if (!open) setPointEditorId(null);
-        }}
-      >
-        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-3 p-4 sm:max-w-lg">
-          <DialogHeader className="shrink-0 pr-8">
-            <DialogTitle>编辑点位 · {editorPoint?.code || "点位详情"}</DialogTitle>
+
+      {/*
+        生成点位、备份导出、底图与 CAD 协作这些是「偶尔才用一次」的功能。
+        以前它们固定占着页面最下面两行，现在收进一个弹窗：
+        平时看不见，要用点顶栏的「⋯」；下面整块空间还给图纸。
+      */}
+      <Dialog open={moreOpen} onOpenChange={setMoreOpen}>
+        <DialogContent className="max-h-[85svh] w-full max-w-3xl overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>更多工具</DialogTitle>
             <DialogDescription>
-              点击同类图标即可更换，完成后请保存草稿。
+              生成点位、备份导出、底图与 CAD 协作。这些是偶尔才用一次的功能，放在这里不占工作区。
             </DialogDescription>
           </DialogHeader>
-          <div className="min-h-0 overflow-y-auto p-1">
-            {editorPoint && (
-              <PointEditor
-                key={editorPoint.id}
-                active
-                point={editorPoint}
-                products={products}
-                roomOptions={availableRooms}
-                  onAddRoom={addFloorRoom}
-                onActivate={() => setActivePointId(editorPoint.id)}
-                onPatch={(patch) => patchPoint(editorPoint.id, patch)}
-                onRemove={() => removePoint(editorPoint.id)}
-                readOnly={editingDisabled}
+          <div className="space-y-3">
+            {/* 这些是偶尔才用的：从顶栏撤下来的楼层设置和图纸对照。 */}
+            <details className="rounded-xl border bg-card px-3 py-1.5">
+              <summary className="cursor-pointer text-xs font-medium text-muted-foreground">楼层与底图 · 上传、改名、添加</summary>
+              <div className="mt-3 space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="point-map-floor-name" className="text-xs">楼层名称</Label>
+              <Input id="point-map-floor-name" className="h-8" value={floor?.name ?? ""} onChange={(event) => patchFloor({ name: event.target.value })} disabled={editingDisabled} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">底图</Label>
+              <FloorplanUpload disabled={editingDisabled || uploading} onUpload={uploadFloorplan} />
+            </div>
+            <Button size="sm" variant="outline" className="w-full" onClick={addFloor} disabled={editingDisabled}>
+              <Plus className="size-4" />
+              {selectedPropertyType === "flat" ? "添加图纸" : "添加楼层"}
+            </Button>
+              </div>
+            </details>
+            <details className="rounded-xl border bg-card px-3 py-1.5">
+              <summary className="cursor-pointer text-xs font-medium text-muted-foreground">图纸对照 · 灯光图 / 开关图</summary>
+              <div className="mt-3">
+          <PointMapDrawings plan={plan} floor={floor} view={drawingView} disabled={editingDisabled || uploading} onSelect={setDrawingView} onApply={(next, expected) => {
+            if (planRef.current !== expected || next.projectId !== projectRef.current || editingDisabledRef.current || pendingUploadsRef.current > 0) return false;
+            savePlan(next);
+            return true;
+          }} />
+                </div>
+            </details>
+      {/*
+        折起来的一行只占一条细栏，把高度留给画布。
+        开合要等云端状态确定后再决定：加载中 plan 是空的，会先判成「没有内容」而展开，
+        数据回来后又立刻折回去 —— 页面上就是「跳一下，画布和底图跟着变大小」。
+        加上 cloudState !== "loading"，这个判断就只发生一次。
+        冲突时也不能展开：展开会把画布从 516 压到 352，整页高度跳 164 像素 ——
+        冲突的处理入口改到页头「处理冲突」弹窗里，不再靠展开面板。
+      */}
+      <details className="rounded-xl border bg-card px-3 py-1.5" open>
+        <summary className="cursor-pointer text-xs font-medium">
+          <Sparkles className="mr-1 inline size-3.5 align-[-2px]" aria-hidden="true" />
+          AI 生成点位 · 从 CAD 导入，或粘贴助手草稿
+        </summary>
+        <div className="mt-3 space-y-3">
+
+      <details className="border-t pt-3">
+        <summary className="cursor-pointer text-sm font-medium">
+          从 CAD 导入生成点位
+        </summary>
+        <div className="mt-3 space-y-3">
+          <p className="text-sm text-muted-foreground">
+            上传原始 DWG / DXF，由本实例服务端调用 CAD 导入服务，按图纸窗口生成干净底图与待复核点位。
+            需要先在服务端配置 <code className="text-xs">CAD_IMPORT_SERVICE_URL</code> 与{" "}
+            <code className="text-xs">CAD_IMPORT_SERVICE_TOKEN</code>；令牌不会进入浏览器。
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label htmlFor="cad-space">原图布局名（可选）</Label>
+              <Input
+                id="cad-space"
+                value={cadSpace}
+                disabled={editingDisabled || cadBusy}
+                onChange={(event) => setCadSpace(event.target.value)}
+                placeholder="例如 平面图；留空则导出全部布局"
               />
-            )}
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="cad-floor">楼层名</Label>
+              <Input
+                id="cad-floor"
+                value={cadFloorName}
+                disabled={editingDisabled || cadBusy}
+                onChange={(event) => setCadFloorName(event.target.value)}
+                placeholder="一层"
+              />
+            </div>
           </div>
-          <div className="shrink-0 space-y-2 border-t pt-3">
-            <p
-              role="status"
-              aria-live="polite"
-              title={editorSaveStatus}
-              className={cn(
-                "line-clamp-2 text-xs leading-5 text-muted-foreground",
-                pointMapSaveError && "text-destructive",
-              )}
-            >
-              {editorSaveStatus}
-            </p>
-            <div className="flex flex-wrap justify-end gap-2">
+          <Input
+            id="cad-file"
+            type="file"
+            accept=".dwg,.dxf"
+            disabled={editingDisabled || cadBusy}
+            onChange={(event) => {
+              const file = event.target.files?.[0] ?? null;
+              event.target.value = "";
+              void importCadFile(file);
+            }}
+          />
+          <p className="text-xs text-muted-foreground">
+            {cadBusy
+              ? "正在处理：解码图纸、按窗口渲染底图与参考图、提取点位，可能需要几分钟…"
+              : "生成的点位是待复核状态，不会自动确认，也不改报价或固定交付版本。"}
+          </p>
+        </div>
+      </details>
+
+      <details className="border-t pt-3">
+        <summary className="cursor-pointer text-sm font-medium">
+          导入助手点位草稿
+        </summary>
+        <div className="mt-3 grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="min-w-0 space-y-2">
+            <Label htmlFor="point-map-draft">点位 JSON</Label>
+            <Textarea
+              id="point-map-draft"
+              className="field-sizing-fixed min-h-32 min-w-0 max-w-full font-mono text-xs"
+              value={draftText}
+              disabled={editingDisabled}
+              onChange={(event) => {
+                setDraftText(event.target.value);
+                setDraftPreview(null);
+                setDraftError("");
+              }}
+              placeholder="粘贴助手提供的 fmkj-point-map-draft JSON，先校验预览，再确认预摆。"
+            />
+            <div className="flex flex-wrap gap-2">
+              <JsonDraftUpload
+                disabled={editingDisabled}
+                onUpload={importDraftFile}
+              />
               <Button
-                type="button"
                 variant="outline"
-                onClick={() => setPointEditorId(null)}
+                size="sm"
+                onClick={previewDraft}
+                disabled={editingDisabled || !draftText.trim()}
               >
-                完成编辑
-              </Button>
-              <Button
-                type="button"
-                onClick={() => saveCloud()}
-                disabled={
-                  editingDisabled ||
-                  uploading ||
-                  !selectedProjectId ||
-                  cloudRevision === null ||
-                  cloudState === "conflict"
-                }
-              >
-                <Save className="size-4" />
-                保存到数据库
+                校验并预览
               </Button>
             </div>
+            {draftError && (
+              <p role="alert" className="text-sm text-destructive">
+                {draftError}
+              </p>
+            )}
+          </div>
+          <div className="rounded-lg bg-muted/40 p-3 text-sm">
+            {draftPreview ? (
+              <div className="space-y-2">
+                <p className="font-medium">校验通过，当前图纸尚未改动</p>
+                <p>
+                  {draftPreview.floors.length} 个楼层 ·{" "}
+                  {draftPreview.points.length} 个点位 ·{" "}
+                  {draftPreview.scenes.length} 个场景
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {draftPreview.floors.map((item) => item.name).join("、")}
+                  。相同 ID 保留已有微调；新导入点位和场景需要复核。
+                </p>
+                {draftPreview.points.some(
+                  (point) =>
+                    point.productId &&
+                    !products.some((product) => product.id === point.productId),
+                ) && (
+                  <p className="text-xs text-destructive">
+                    有产品建议未匹配当前产品库，导入后请重新选型。
+                  </p>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={applyDraft}
+                  disabled={editingDisabled}
+                >
+                  确认预摆点位
+                </Button>
+              </div>
+            ) : (
+              <p className="text-xs leading-6 text-muted-foreground">
+                在助手聊天中分析清晰平面图、开关图，取得点位草稿后导入。
+                楼层底图可以在导入后逐层上传。
+              </p>
+            )}
+          </div>
+        </div>
+      </details>
+
+        </div>
+      </details>
+{/* 备份、导出、底图校准与 CAD 回传：和「生成点位」无关，单独一块，免得混在一起找。 */}
+      <details className="rounded-xl border bg-card px-3 py-1.5" open>
+        <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+          备份、导出与 CAD 回传
+        </summary>
+        <div className="mt-3 space-y-3">
+          <p className="text-xs text-muted-foreground">草稿 PNG 使用当前编辑位置与已保存报价，仅用于检查。客户 PNG 与 PDF 请从“客户交付”生成固定版本后导出。</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="outline" onClick={exportJson} disabled={uploading || (!plan.points.length && !hasPlanContent(plan))}><Download className="size-4" />导出草稿 JSON</Button>
+            <Button size="sm" variant="outline" onClick={exportPng} disabled={uploading || !floor?.floorplanDataUrl}><Download className="size-4" />草稿检查 PNG</Button>
+            <Button size="sm" variant="outline" onClick={compactFloorplan} disabled={editingDisabled || uploading || !floor?.floorplanDataUrl}>整理底图留白</Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={loadCloud}
+            disabled={busy || uploading || !selectedProjectId}
+          >
+            加载云端草稿
+          </Button>
+          {hasBackup && (
+            <Button size="sm" variant="outline" onClick={exportLocalBackup}>
+              导出本机备份
+            </Button>
+          )}
+          </div>
+      <PointMapPresentationPanel
+        plan={plan}
+        saved={cloudRevision !== null && !dirty}
+        disabled={editingDisabled || uploading}
+        onApply={(next, expected) => {
+          if (planRef.current !== expected || next.projectId !== projectRef.current || editingDisabledRef.current || pendingUploadsRef.current > 0) return false;
+          savePlan(next);
+          planRef.current = normalizeDesignPlan(next);
+          return true;
+        }}
+      />
+      <PointMapCadPanel
+        key={`${selectedProjectId}:${floor?.id ?? ""}`}
+        plan={plan}
+        floor={floor}
+        projectName={selectedProject.name}
+        editingDisabled={editingDisabled}
+        uploading={uploading}
+        getCurrentContext={() => ({
+          plan: planRef.current,
+          projectId: projectRef.current,
+          floorId: activePointMapFloor(planRef.current)?.id,
+          editingDisabled: editingDisabledRef.current,
+          uploading: pendingUploadsRef.current > 0,
+        })}
+        onApply={(next, expected) => {
+          if (
+            planRef.current !== expected ||
+            next.projectId !== projectRef.current ||
+            editingDisabledRef.current ||
+            pendingUploadsRef.current > 0
+          )
+            return false;
+          savePlan(next);
+          planRef.current = normalizeDesignPlan(next);
+          return true;
+        }}
+      />
+        </div>
+      </details>
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={compactInspector && Boolean(editorPoint)} onOpenChange={(open) => { if (!open) setPointEditorId(null); }}>
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-3 p-4 sm:max-w-md">
+          <DialogHeader className="shrink-0 pr-8">
+            <DialogTitle>编辑点位 · {editorPoint?.code || "点位"}</DialogTitle>
+            <DialogDescription>修改后保存草稿；完成编辑只关闭详情。</DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 overflow-y-auto p-1">
+            {editorPoint ? <PointEditor
+              key={editorPoint.id}
+              active
+              point={editorPoint}
+              products={products}
+              roomOptions={availableRooms}
+              onAddRoom={addFloorRoom}
+              onActivate={() => setActivePointId(editorPoint.id)}
+              onPatch={(patch) => patchPoint(editorPoint.id, patch)}
+              onRemove={() => removePoint(editorPoint.id)}
+              readOnly={editingDisabled}
+            /> : null}
+          </div>
+          <p role="status" aria-live="polite" className={cn("shrink-0 text-xs leading-5 text-muted-foreground", pointMapSaveError && "text-destructive")}>{editorSaveStatus}</p>
+          <DialogFooter className="shrink-0">
+            <Button variant="outline" onClick={() => setPointEditorId(null)}>完成编辑</Button>
+            <Button onClick={() => saveCloud()} disabled={editingDisabled || uploading || !selectedProjectId || cloudRevision === null || cloudState === "conflict"}>
+              <Save className="size-4" />保存草稿
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={unplacedOpen} onOpenChange={(open) => setUnplacedOpen(open)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -2320,36 +2591,15 @@ export function PointMapWorkbench({
           <DialogHeader>
             <DialogTitle>房间复核进度</DialogTitle>
             <DialogDescription>
-              {floor?.name} · {floorPoints.length} 个点位。点击房间可筛选画布，再点一次取消。
+              {floor?.name} · {floorPoints.length} 个点位。这里只看各房间复核进度，筛选点位请用画布上方的房间选择。
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-96 space-y-2 overflow-y-auto">
-            <Button
-              type="button"
-              size="sm"
-              variant={roomFilter === null ? "secondary" : "ghost"}
-              className="h-7 w-full justify-start text-xs"
-              aria-pressed={roomFilter === null}
-              onClick={() => setRoomFilter(null)}
-            >
-              全部房间
-            </Button>
             {roomStats.map((room) => (
-              <button
-                key={room.room}
-                type="button"
-                aria-pressed={roomFilter === room.room}
-                onClick={() =>
-                  setRoomFilter(roomFilter === room.room ? null : room.room)
-                }
-                className={cn(
-                  "w-full space-y-1 rounded-md p-1.5 text-left hover:bg-muted",
-                  roomFilter === room.room && "bg-muted",
-                )}
-              >
+              <div key={room.room} className="space-y-1 rounded-md p-1.5">
                 <div className="flex items-center justify-between text-xs">
                   <span>{room.room}</span>
-                  <span className="text-muted-foreground">
+                  <span className="text-muted-foreground tabular-nums">
                     {room.confirmed}/{room.total}
                   </span>
                 </div>
@@ -2360,7 +2610,7 @@ export function PointMapWorkbench({
                       : 0
                   }
                 />
-              </button>
+              </div>
             ))}
             {!roomStats.length && (
               <p className="text-xs text-muted-foreground">当前楼层暂无点位。</p>
@@ -2464,7 +2714,7 @@ function SceneEditor({
     patchScene(scene.id, { status: "confirmed" });
   }
   return (
-    <Card>
+    <Card className="gap-0 py-0">
       <CardHeader className="p-3">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -2726,72 +2976,6 @@ function downloadJson(value: unknown, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function Toolbar({
-  disabled = false,
-  products,
-  selectedProductId,
-  selectedRoom,
-  roomOptions,
-  onProductChange,
-  onRoomChange,
-}: {
-  disabled?: boolean;
-  products: Product[];
-  selectedProductId: string;
-  selectedRoom: string;
-  roomOptions: string[];
-  onProductChange: (id: string) => void;
-  onRoomChange: (room: string) => void;
-}) {
-  const roomListId = React.useId();
-  return (
-    <div className="grid gap-2">
-      <div className="grid gap-2 lg:grid-cols-[160px_minmax(220px,1fr)]">
-        <div className="grid gap-2">
-          <Label className="text-xs" htmlFor={`${roomListId}-input`}>
-            房间（可自定义）
-          </Label>
-          <Input
-            id={`${roomListId}-input`}
-            list={roomListId}
-            className="h-8"
-            value={selectedRoom}
-            onChange={(event) => onRoomChange(event.target.value)}
-            disabled={disabled}
-          />
-          <datalist id={roomListId}>
-            {roomOptions.map((room) => (
-              <option key={room} value={room} />
-            ))}
-          </datalist>
-        </div>
-        <div className="grid gap-2">
-          <Label className="text-xs">默认产品</Label>
-          <Select
-            value={selectedProductId || "none"}
-            onValueChange={(value) =>
-              onProductChange(value === "none" ? "" : value)
-            }
-            disabled={disabled}
-          >
-            <SelectTrigger className="h-8" aria-label="默认产品">
-              <SelectValue placeholder="选择产品" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">暂不关联产品</SelectItem>
-              {products.map((product) => (
-                <SelectItem key={product.id} value={product.id}>
-                  {product.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function IconPalette({
   disabled = false,
   selectedIconId,
@@ -2807,56 +2991,44 @@ function IconPalette({
 }) {
   const [category, setCategory] = React.useState<string>(() => findPointIconById(selectedIconId)?.category ?? "开关");
   return (
-    <div className="max-h-[72vh] overflow-y-auto rounded-lg border bg-muted/20 p-2">
-      <label className="mb-3 grid gap-1 text-xs font-medium">
-        设备类别
-        <select aria-label="布点设备类别" value={category} disabled={disabled} onChange={(event) => setCategory(event.target.value)} className="h-8 min-w-0 rounded-md border bg-background px-2 text-xs">
-          {pointIconGroups.map((group) => <option key={group.category} value={group.category}>{group.category}</option>)}
-        </select>
-      </label>
-      {pointIconGroups.filter((group) => group.category === category).map((group) => (
-        <div key={group.category} className="mb-3 last:mb-0">
-          <div className="mb-1 px-1 text-[11px] font-medium text-muted-foreground">
-            {group.category}
-          </div>
-          <div className="grid grid-cols-4 gap-1.5 2xl:grid-cols-5">
-            {group.icons.map((icon) => (
-              <button
-                key={icon.id}
-                type="button"
-                draggable={!disabled}
-                disabled={disabled}
-                aria-label={`${icon.name} ${icon.code}`}
-                aria-pressed={selectedIconId === icon.id}
-                onDragEnd={onDragEnd}
-                onDragStart={(event) => {
-                  event.dataTransfer.setData(
-                    "application/x-point-icon",
-                    icon.id,
-                  );
-                  event.dataTransfer.effectAllowed = "copy";
-                  onDragStart(icon.id);
-                }}
-                onClick={() => onIconChange(icon.id)}
-                className={cn(
-                  "group flex size-7 items-center justify-center rounded-md border bg-background transition hover:border-primary/60 hover:bg-muted active:scale-95",
-                  selectedIconId === icon.id &&
-                    "border-primary bg-primary/5 ring-2 ring-primary/20",
-                )}
-                title={`${icon.name} ${icon.code}`}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element -- Local device vectors share their geometry with CAD blocks. */}
-                <img
-                  src={icon.icon}
-                  alt=""
-                  className="size-5 object-contain"
-                  draggable={false}
-                />
-              </button>
-            ))}
-          </div>
-        </div>
-      ))}
+    // 横向版：挂在画布底部当浮动工具条，不再是左侧一整列。
+    <div className="flex min-w-0 items-center gap-2">
+      <select
+        aria-label="布点设备类别"
+        value={category}
+        disabled={disabled}
+        onChange={(event) => setCategory(event.target.value)}
+        className="h-7 shrink-0 rounded-md border bg-background px-1.5 text-xs"
+      >
+        {pointIconGroups.map((group) => <option key={group.category} value={group.category}>{group.category}</option>)}
+      </select>
+      <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
+        {pointIconGroups.filter((group) => group.category === category).flatMap((group) => group.icons).map((icon) => (
+          <button
+            key={icon.id}
+            type="button"
+            draggable={!disabled}
+            disabled={disabled}
+            aria-label={`${icon.name} ${icon.code}`}
+            aria-pressed={selectedIconId === icon.id}
+            onDragEnd={onDragEnd}
+            onDragStart={(event) => {
+              event.dataTransfer.setData("application/x-point-icon", icon.id);
+              event.dataTransfer.effectAllowed = "copy";
+              onDragStart(icon.id);
+            }}
+            onClick={() => onIconChange(icon.id)}
+            className={cn(
+              "group flex size-7 shrink-0 items-center justify-center rounded-md border bg-background transition hover:border-primary/60 hover:bg-muted active:scale-95",
+              selectedIconId === icon.id && "border-primary bg-primary/5 ring-2 ring-primary/20",
+            )}
+            title={`${icon.name} ${icon.code}`}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element -- Local device vectors share their geometry with CAD blocks. */}
+            <img src={icon.icon} alt="" className="size-5 object-contain" draggable={false} />
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -2988,7 +3160,7 @@ function PointEditor({
                       {item.name}
                     </span>
                     {selected && (
-                      <span className="text-[10px] leading-3 text-primary">
+                      <span className="text-xs leading-4 text-primary">
                         当前图标
                       </span>
                     )}
@@ -3220,36 +3392,6 @@ function PointEditor({
   );
 }
 
-function ProjectSelect({
-  disabled = false,
-  projects,
-  value,
-  onChange,
-}: {
-  disabled?: boolean;
-  projects: Project[];
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <Select
-      value={value}
-      onValueChange={onChange}
-      disabled={disabled || projects.length === 0}
-    >
-      <SelectTrigger className="w-[240px]">
-        <SelectValue placeholder="暂无项目" />
-      </SelectTrigger>
-      <SelectContent>
-        {projects.map((project) => (
-          <SelectItem key={project.id} value={project.id}>
-            {project.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
 
 function FloorplanUpload({
   disabled = false,

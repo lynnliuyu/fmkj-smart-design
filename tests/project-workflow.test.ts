@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { buildAccountContext } from "../lib/account-context.js"
+import { buildAccountContext, type AccountContext } from "../lib/account-context.js"
 import {
   ProjectWorkflow,
   type ProjectCreateRecordInput,
@@ -20,6 +20,37 @@ const sessionUser: AuthUser = {
 }
 
 describe("project workflow", () => {
+  it("blocks disabled project reads while preserving expired read access", async () => {
+    const repository = new MemoryProjectWorkflowRepository([projectRecord({ id: "project_1" })])
+    const workflow = new ProjectWorkflow({ activity: new MemoryProjectActivityAdapter(), repository })
+    await expect(workflow.listProjects(buildAccountContext(sessionUser, { id: sessionUser.userId, role: "admin", status: "disabled" }))).rejects.toMatchObject({ code: "ACCOUNT_DISABLED", status: 403 })
+    const expired = buildAccountContext(sessionUser)
+    expired.account.subscriptionStatus = "expired"
+    await expect(workflow.listProjects(expired)).resolves.toMatchObject({ total: 1 })
+  })
+  it.each(["details", "stage", "risk"])("rejects %s writes for an explicitly read-only project member", async (action) => {
+    const repository = new MemoryProjectWorkflowRepository([projectRecord({ id: "project_1" })])
+    repository.accessLevel = "view"
+    const activity = new MemoryProjectActivityAdapter()
+    const workflow = new ProjectWorkflow({ activity, repository })
+    const context = buildAccountContext(sessionUser, { id: sessionUser.userId, role: "editor", status: "active" }, { id: "org_1", name: "Org", role: "editor" })
+    const before = structuredClone(repository.projects)
+    const result = action === "details"
+      ? workflow.updateDetails("project_1", { name: "Should not change" }, context)
+      : action === "stage" ? workflow.advanceStage("project_1", context) : workflow.toggleRisk("project_1", "normal", context)
+
+    await expect(result).rejects.toMatchObject({ code: "PROJECT_READ_ONLY", status: 403 })
+    expect(repository.projects).toEqual(before)
+    expect(activity.records).toEqual([])
+  })
+
+  it("allows an assigned editor to advance a project", async () => {
+    const repository = new MemoryProjectWorkflowRepository([projectRecord({ id: "project_1" })])
+    repository.accessLevel = "edit"
+    const workflow = new ProjectWorkflow({ activity: new MemoryProjectActivityAdapter(), repository })
+    const context = buildAccountContext(sessionUser, { id: sessionUser.userId, role: "editor", status: "active" }, { id: "org_1", name: "Org", role: "editor" })
+    await expect(workflow.advanceStage("project_1", context)).resolves.toMatchObject({ id: "project_1" })
+  })
   it("creates a personal project and records the Project event", async () => {
     const repository = new MemoryProjectWorkflowRepository()
     const activity = new MemoryProjectActivityAdapter()
@@ -270,6 +301,7 @@ class MemoryProjectActivityAdapter implements ProjectWorkflowActivityAdapter {
 
 class MemoryProjectWorkflowRepository implements ProjectWorkflowRepository {
   readonly projects: Array<ProjectRecord & { ownerScope?: ProjectCreateRecordInput["ownerScope"] }> = []
+  accessLevel: string | null = null
 
   constructor(projects: ProjectRecord[] = []) {
     this.projects.push(...projects)
@@ -308,8 +340,9 @@ class MemoryProjectWorkflowRepository implements ProjectWorkflowRepository {
 
   async grantProjectAccess() {}
 
-  async canAccessProject(projectId: string) {
+  async getProjectAccess(projectId: string, context: AccountContext) {
     return this.projects.some((project) => project.id === projectId)
+      ? { createdBy: context.user.userId, accessLevel: this.accessLevel } : null
   }
 
   async getProjectForStageUpdate(projectId: string) {

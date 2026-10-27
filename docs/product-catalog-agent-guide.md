@@ -58,7 +58,13 @@ node --env-file=.env.local scripts/review-product-mapping.mjs audit --out .local
 
 ## 2. 收集资料，保留可复核来源
 
-复制 [采集模板](templates/product-catalog-collection.template.json)，把每批实际资料保存在 `.local/product-catalog-collection/<批次>/`。模板是采集清单，**不是可直接导入的请求体，也没有对应的批量导入接口**；`product` 才是待整理的产品字段，其他属性是工作底稿。
+复制 [采集模板](templates/product-catalog-collection.template.json)，把每批实际资料保存在 `.local/product-catalog-collection/<批次>/`。这个采集模板是工作底稿，**不是可直接导入的请求体**；`product` 才是待整理的产品字段，其他属性是工作底稿。
+
+批量入库走「产品管理 → 批量导入」：下载 CSV 模板 → 填产品字段 → 先预演（会显示每行是新增、覆盖哪几项还是有问题）→ 确认才写库。
+
+表格里的 `参数` 列写成 `名称=值` 用分号隔开（例如 `button_count=2;relay_count=1;wiring=neutral`），
+数字与 true/false 会自动按类型识别，再由设备类型的定义校验一遍——写错键名或类型会在预演阶段逐行报出来。
+`通信协议` / `设备能力` 同样用分号分隔，取值必须是代码里定义的枚举。`图片地址` 填站内路径（如 `/placeholder.svg`）或已是本地 `/api/files/...` 的地址。这条路和手工新建/编辑走同一个写入服务（校验、报价快照冻结、审计、映射版本都照旧），它不认识采集模板里的证据结构：参数与价格的**依据**仍要在后台逐条补齐后核验，不能靠导入把未核实的资料变成已核验。
 
 来源优先使用厂家官网的准确型号页、说明书、安装接线图、官方兼容清单；渠道报价用于核价，用户提供的资料也记录文件名、页码和日期。需要上网获取新资料时实际打开对应页面或文件，搜索摘要和其他 AI 的回答只作检索线索。
 

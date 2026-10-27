@@ -2,6 +2,7 @@ import { pointMapImageSize, POINT_MAP_EXPORT_SYMBOL_SIZE } from "./point-map-ima
 import { findPointIconById } from "./point-icons"
 import type { PointMapNode, PointMapPlan, PointMapScene } from "./point-map-plan"
 import { normalizeDesignPlan } from "./point-map-design"
+import { specValueLabel } from "./device-spec-labels"
 import { findDeviceType, type DeviceSpecs } from "./device-types"
 import { resolvePointMapBackground } from "./point-map-presentation"
 import { layoutPointMapMarkers } from "./point-map-marker-layout"
@@ -512,10 +513,10 @@ export function pointDetailLines(point: PointMapNode): string[] {
 
 function describeSpecs(typeId: string | undefined, specs: DeviceSpecs): string {
   const type = findDeviceType(typeId)
-  const labels: Record<string, string> = { neutral: "零火", "no-neutral": "单火", "dry-contact": "干接点", "low-voltage": "低压", "ac-mains": "市电", dc: "直流", poe: "PoE", battery: "电池", indoor: "室内", outdoor: "室外", "indoor-outdoor": "室内外通用" }
+
   return Object.entries(specs).map(([key, value]) => {
     const field = type?.specs.find((item) => item.key === key)
-    const shown = typeof value === "boolean" ? value ? "是" : "否" : labels[String(value)] ?? String(value)
+    const shown = specValueLabel(value)
     return `${field?.name ?? key} ${shown}${field?.unit ?? ""}`
   }).join("、")
 }

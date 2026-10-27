@@ -35,7 +35,7 @@ export function PointMapPresentationPanel({ plan, disabled, saved, onApply }: {
     }
   }
 
-  return <details className="rounded-xl border bg-card p-3">
+  return <details className="border-t pt-3">
     <summary className="cursor-pointer text-sm font-medium">客户展示底图 · {backgrounds.length ? `已绑定 ${backgrounds.length} 层风格净底` : "使用工程净底"}</summary>
     <div className="mt-3 space-y-3">
       <p className="text-xs leading-5 text-muted-foreground">在工程图上调整点位。导出 PNG 和 PDF 时，使用各楼层已校准的风格净底并叠加商品圆图；移动点位或更换商品可复用底图。</p>
@@ -46,7 +46,7 @@ export function PointMapPresentationPanel({ plan, disabled, saved, onApply }: {
       <div className="grid gap-3 sm:grid-cols-3">{backgrounds.map((floor) => {
         const background = floor.presentation!
         const calibration = measurePresentationCalibration(background)
-        return <figure key={floor.id} className="rounded-lg border bg-white p-3"><img src={background.imageDataUrl} alt={`${floor.name} 风格净底（不含点位）`} className="h-44 w-full object-contain" /><figcaption className="mt-2 text-sm font-medium">{floor.name} · {background.name}</figcaption><p className="mt-1 text-xs text-muted-foreground">{calibration.anchorCount} 处校准参考 · 展示效果图</p></figure>
+        return <figure key={floor.id} className="rounded-lg bg-muted/60 p-3"><img src={background.imageDataUrl} alt={`${floor.name} 风格净底（不含点位）`} className="h-44 w-full object-contain" /><figcaption className="mt-2 text-sm font-medium">{floor.name} · {background.name}</figcaption><p className="mt-1 text-xs text-muted-foreground">{calibration.anchorCount} 处校准参考 · 展示效果图</p></figure>
       })}</div>
     </div>
   </details>

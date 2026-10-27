@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 
-import { getCurrentAccountContext } from "@/lib/account-context"
+import { accountContextCan, getCurrentAccountContext, type AccountContext } from "@/lib/account-context"
 import {
   type ActivityFeedItem,
   type ActivityLogRow,
@@ -9,6 +9,7 @@ import {
   formatRelativeTime,
 } from "@/lib/activity-feed"
 import { getPool } from "@/lib/server-db"
+import { projectVisibilityWhere } from "@/lib/project-access"
 
 type ProjectActivityRow = {
   createdAt: Date
@@ -38,10 +39,14 @@ export async function GET() {
   if (!context) {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 })
   }
+  if (context.account.status !== "active" || !accountContextCan(context, "project.view")) {
+    return NextResponse.json({ error: "PROJECT_VIEW_REQUIRED" }, { status: 403 })
+  }
 
   try {
     const now = new Date()
-    const persistedActivities = await loadPersistedActivities(now)
+    const visibility = projectVisibilityWhere(context)
+    const persistedActivities = await loadPersistedActivities(now, context)
 
     if (persistedActivities.length > 0) {
       return NextResponse.json({
@@ -72,9 +77,10 @@ export async function GET() {
         left join users updater on updater.id = p.updated_by
         where p.deleted_at is null
           and p.status::text <> 'archived'
+          and (${visibility.where})
         order by p.updated_at desc, p.created_at desc
         limit 8
-      `),
+      `, visibility.params),
       getPool().query<QuoteActivityRow>(`
         select
           q.id::text,
@@ -89,9 +95,11 @@ export async function GET() {
         left join users creator on creator.id = q.created_by
         left join users updater on updater.id = q.updated_by
         where q.deleted_at is null
+          and p.deleted_at is null
+          and (${visibility.where})
         order by q.updated_at desc
         limit 8
-      `),
+      `, visibility.params),
     ])
 
     const activities = [
@@ -116,23 +124,28 @@ export async function GET() {
   }
 }
 
-async function loadPersistedActivities(now: Date) {
+async function loadPersistedActivities(now: Date, context: AccountContext) {
+  const visibility = projectVisibilityWhere(context)
   const result = await getPool().query<ActivityLogRow>(`
     select
-      id::text,
-      action,
-      actor_name as "actorName",
-      entity_type as "entityType",
-      entity_label as "entityLabel",
-      title,
-      description,
-      occurred_at as "occurredAt",
-      duration_seconds as "durationSeconds",
-      metadata
-    from activity_logs
-    order by occurred_at desc, created_at desc
+      al.id::text,
+      al.action,
+      al.actor_name as "actorName",
+      al.entity_type as "entityType",
+      al.entity_label as "entityLabel",
+      al.title,
+      al.description,
+      al.occurred_at as "occurredAt",
+      al.duration_seconds as "durationSeconds",
+      al.metadata
+    from activity_logs al
+    left join quotes aq on al.entity_type = 'quote' and aq.id = al.entity_id and aq.deleted_at is null
+    left join projects p on p.id = case when al.entity_type = 'project' then al.entity_id else aq.project_id end
+    where (p.id is not null and p.deleted_at is null and (${visibility.where}))
+      ${context.account.isSuperAdmin ? "or al.entity_type = 'product'" : ""}
+    order by al.occurred_at desc, al.created_at desc
     limit 12
-  `)
+  `, visibility.params)
 
   return result.rows.map((row) => activityLogRowToFeedItem(row, now))
 }

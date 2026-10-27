@@ -30,6 +30,8 @@ export async function POST(request: NextRequest) {
       image: body.image ? String(body.image) : null,
       name: String(body.name ?? ""),
       platform: body.platform ? String(body.platform) : null,
+      series: body.series === undefined ? undefined : body.series === null ? null : String(body.series),
+      platforms: Array.isArray(body.platforms) ? body.platforms.map(String) : undefined,
       price: Number(body.price ?? 0),
       sku: String(body.sku ?? ""),
       status: body.status ? (String(body.status) as never) : "pending_review",

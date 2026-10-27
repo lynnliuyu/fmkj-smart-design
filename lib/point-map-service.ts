@@ -4,7 +4,7 @@ import type { AccountContext } from "./account-context"
 import { requireAccountPermission } from "./account-gates"
 import { validateDesignPlan } from "./point-map-design"
 import type { PointMapPlan } from "./point-map-plan"
-import { projectVisibilityWhere } from "./project-access"
+import { canWriteProjectMembership, projectVisibilityWhere } from "./project-access"
 import { getPool } from "./server-db"
 import { hydratePlanSelections } from "./point-map-selection-service"
 
@@ -159,9 +159,7 @@ export function assertPermission(context: AccountContext, permission: "point_map
 }
 
 export function assertWritableMembership(context: AccountContext, project: VisibleProject) {
-  if (context.account.type !== "ENTERPRISE_MEMBER") return
-  if (project.accessLevel === "view") throw new PointMapServiceError("PROJECT_READ_ONLY", 403)
-  if (project.createdBy !== context.user.userId && project.accessLevel !== "admin" && project.accessLevel !== "edit") {
+  if (!canWriteProjectMembership(context, project)) {
     throw new PointMapServiceError("PROJECT_READ_ONLY", 403)
   }
 }

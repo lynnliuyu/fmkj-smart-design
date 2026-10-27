@@ -1,4 +1,4 @@
-import type { PointMapQuoteSnapshot } from "./quote-draft"
+import type { PointMapProcurementPreviewResponse } from "./point-map-procurement"
 import { writePointMapQuoteSnapshot } from "./quote-draft"
 
 export type QuoteRefreshResult =
@@ -42,7 +42,7 @@ export async function refreshPointMapQuote(projectId: string, projectName: strin
     body: JSON.stringify({ expectedRevision: revision }),
     ...(signal ? { signal } : {}),
   })
-  const result = (await response.json()) as { error?: string; blocked: boolean; diagnostics?: unknown[]; included: number; excluded: number; unverified?: unknown[]; data: PointMapQuoteSnapshot }
+  const result = (await response.json()) as PointMapProcurementPreviewResponse & { error?: string }
   if (!response.ok) return { updated: false, message: result.error || "报价来源核对失败，请重新保存点位后重试。" }
   if (result.blocked) return { updated: false, message: `有 ${result.diagnostics?.length ?? 0} 个点位的资料需要核对。` }
   if (!result.data || result.data.projectId !== projectId || result.data.revision !== revision || !Array.isArray(result.data.items)) {
@@ -51,7 +51,8 @@ export async function refreshPointMapQuote(projectId: string, projectName: strin
   if (options.isCurrent && !options.isCurrent()) return { updated: false, message: "项目或版本已切换，未替换原预览。" }
   ;(options.publish ?? writePointMapQuoteSnapshot)({
     ...result.data,
-    items: result.data.items.map((item) => ({ ...item, project: projectName })),
+    // 本机报价编辑格式需要数值；无权查看成本时只填占位值，真实成本由服务端保存时恢复。
+    items: result.data.items.map((item) => ({ ...item, cost: item.cost ?? 0, project: projectName })),
   })
   return { updated: true, included: result.included, excluded: result.excluded, unverified: result.unverified?.length ?? 0 }
   } catch (error) {

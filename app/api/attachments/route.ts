@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentAccountContext } from "@/lib/account-context";
 import { requireAccountPermission } from "@/lib/account-gates";
-import { projectVisibilityWhere } from "@/lib/project-access";
+import { canWriteProjectMembership, projectVisibilityWhere, type ProjectMembershipAccess } from "@/lib/project-access";
 import { getPool } from "@/lib/server-db";
 
 type AttachmentKind = "contract" | "floorplan" | "quote_pdf" | "project_file";
@@ -22,6 +22,10 @@ export async function GET(request: NextRequest) {
 
   if (!context) {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  }
+
+  if (context.account.status !== "active") {
+    return NextResponse.json({ error: "ACCOUNT_DISABLED" }, { status: 403 });
   }
 
   const projectId = request.nextUrl.searchParams.get("projectId");
@@ -49,6 +53,7 @@ export async function GET(request: NextRequest) {
         join projects p on p.id = a.project_id
         where a.project_id = any($1::uuid[])
           and a.deleted_at is null
+          and p.deleted_at is null
           and (${visibility.where})
         order by a.project_id, a.created_at desc
         `,
@@ -65,6 +70,7 @@ export async function GET(request: NextRequest) {
       join projects p on p.id = a.project_id
       where a.project_id = $1::uuid
         and a.deleted_at is null
+        and p.deleted_at is null
         and (${visibility.where})
       order by a.created_at desc
       `,
@@ -118,19 +124,28 @@ export async function POST(request: NextRequest) {
     }
 
     const visibility = projectVisibilityWhere(context, 1);
-    const project = await getPool().query(
+    const actorParameter = `$${visibility.params.length + 2}`;
+    const project = await getPool().query<ProjectMembershipAccess>(
       `
-      select 1
+      select p.created_by::text as "createdBy",
+        (select pm.access_level::text from project_members pm
+         where pm.project_id = p.id and pm.user_id = ${actorParameter}::uuid and pm.status = 'active'
+         limit 1) as "accessLevel"
       from projects p
       where p.id = $1::uuid
+        and p.deleted_at is null
         and (${visibility.where})
       limit 1
       `,
-      [projectId, ...visibility.params],
+      [projectId, ...visibility.params, context.user.userId],
     );
 
-    if (project.rowCount === 0) {
+    if (!project.rows[0]) {
       return NextResponse.json({ error: "PROJECT_NOT_FOUND" }, { status: 404 });
+    }
+
+    if (!canWriteProjectMembership(context, project.rows[0])) {
+      return NextResponse.json({ error: "PROJECT_READ_ONLY" }, { status: 403 });
     }
 
     const result = await getPool().query(

@@ -13,16 +13,32 @@ const db = vi.hoisted(() => {
     planCode: "ENTERPRISE_MONTHLY" as "ENTERPRISE_MONTHLY" | "ENTERPRISE_CUSTOM",
     organizationExists: true,
     profileType: "SUPER_ADMIN" as "SUPER_ADMIN" | "ENTERPRISE_OWNER",
+    existingUser: false,
+    failOn: null as string | null,
+    transaction: { begin: 0, commit: 0, rollback: 0 },
   }
 
   function answer(sql: string, params?: unknown[]): QueryResult {
     const text = sql.replace(/\s+/g, " ").trim().toLowerCase()
     state.queries.push(text)
+    if (state.failOn && text.startsWith(state.failOn)) throw new Error(`synthetic failure: ${state.failOn}`)
+    if (text === "begin") state.transaction.begin++
+    if (text === "commit") state.transaction.commit++
+    if (text === "rollback") state.transaction.rollback++
 
+    if (text.startsWith("select id::text, code::text as code, name from organization_roles")) {
+      return { rows: [{ id: "role_editor", code: "editor", name: "销售" }], rowCount: 1 }
+    }
+    if (text.startsWith("select id::text from users where lower(email)")) {
+      return state.existingUser ? { rows: [{ id: "existing_user" }], rowCount: 1 } : { rows: [], rowCount: 0 }
+    }
     if (text.startsWith("select id::text, name, owner_user_id")) {
       return state.organizationExists
         ? { rows: [{ id: "org_1", name: "测试团队", ownerUserId: "user_1" }], rowCount: 1 }
         : { rows: [], rowCount: 0 }
+    }
+    if (text.startsWith("insert into users")) {
+      return { rows: [{ id: "new_user" }], rowCount: 1 }
     }
     if (text.startsWith("insert into organizations")) {
       state.organizationExists = true
@@ -67,13 +83,19 @@ const db = vi.hoisted(() => {
 
   return {
     state,
-    pool: { query: async (sql: string, params?: unknown[]) => answer(sql, params) },
+    pool: {
+      query: async (sql: string, params?: unknown[]) => answer(sql, params),
+      connect: async () => ({ query: async (sql: string, params?: unknown[]) => answer(sql, params), release: () => {} }),
+    },
     reset() {
       state.memberCount = 0
       state.queries = []
       state.planCode = "ENTERPRISE_MONTHLY"
       state.organizationExists = true
       state.profileType = "SUPER_ADMIN"
+      state.existingUser = false
+      state.failOn = null
+      state.transaction = { begin: 0, commit: 0, rollback: 0 }
     },
   }
 })
@@ -176,6 +198,66 @@ describe("team member creation", () => {
         roleCode: "editor",
       }),
     ).rejects.toMatchObject({ code: "VALID_EMAIL_REQUIRED", status: 400 })
+  })
+
+  it("reuses a manager's associated organization without creating or moving one", async () => {
+    const manager = buildAccountContext(
+      { ...owner, role: "member" },
+      {
+        account_status: "active",
+        account_type: "ENTERPRISE_MEMBER",
+        id: "user_1",
+        plan_code: "ENTERPRISE_MONTHLY",
+        plan_limits: { canCreateTeam: true, maxMembers: 20 },
+        role: "member",
+        status: "active",
+        subscription_status: "active",
+      },
+      { id: "org_1", name: "测试团队", role: "admin" },
+    )
+    manager.permissions = [...manager.permissions, "enterprise.manage_members"]
+
+    const team = await getAccountTeam(manager)
+
+    expect(team.organization?.id).toBe("org_1")
+    expect(db.state.queries.some((sql) => sql.startsWith("insert into organizations"))).toBe(false)
+    expect(db.state.queries.some((sql) => sql.startsWith("update account_profiles"))).toBe(false)
+  })
+
+  it("commits a new member user, membership and profile together", async () => {
+    await expect(
+      createTeamMember({ context: enterpriseContext(), email: "new@example.com", roleCode: "editor" }),
+    ).resolves.toBeDefined()
+
+    expect(db.state.transaction).toEqual({ begin: 1, commit: 1, rollback: 0 })
+    expect(db.state.queries.some((sql) => sql.startsWith("insert into users"))).toBe(true)
+    expect(db.state.queries.some((sql) => sql.startsWith("insert into organization_members"))).toBe(true)
+    expect(db.state.queries.some((sql) => sql.startsWith("insert into account_profiles"))).toBe(true)
+  })
+
+  it("rolls back all member writes when the profile insert fails", async () => {
+    db.state.failOn = "insert into account_profiles"
+
+    await expect(
+      createTeamMember({ context: enterpriseContext(), email: "rollback@example.com", roleCode: "editor" }),
+    ).rejects.toThrow("synthetic failure")
+
+    expect(db.state.transaction).toEqual({ begin: 1, commit: 0, rollback: 1 })
+  })
+
+  it("rejects an existing global account without converting its profile", async () => {
+    db.state.existingUser = true
+
+    await expect(
+      createTeamMember({
+        context: enterpriseContext(),
+        email: "existing@example.com",
+        roleCode: "editor",
+      }),
+    ).rejects.toMatchObject({ code: "USER_ALREADY_EXISTS", status: 409 })
+
+    expect(db.state.queries.some((sql) => sql.includes("insert into account_profiles"))).toBe(false)
+    expect(db.state.queries.some((sql) => sql.includes("insert into organization_members"))).toBe(false)
   })
 
   it("rejects a blank email before touching the roster", async () => {

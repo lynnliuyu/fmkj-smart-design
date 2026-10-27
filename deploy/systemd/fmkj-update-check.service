@@ -1,0 +1,22 @@
+[Unit]
+Description=FMKJ 设备版：检查有没有新版本（只检查，不安装）
+Documentation=file:/opt/fmkj/app/docs/local-appliance-deployment.md
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/fmkj/app
+# 版本来源、发布方公钥、以及自签仓库的 CA 都写在 /opt/fmkj/app/.env 里；
+# 每台设备自己配，换仓库地址或换证书不用改这个 unit。
+EnvironmentFile=-/opt/fmkj/app/.env
+# 用自建仓库 tag 列表当版本来源、而仓库又是自签证书时，把 CA 交给 Node（否则报
+# UNABLE_TO_VERIFY_LEAF_SIGNATURE）。把证书放到 /opt/fmkj/app/registry-ca.crt 后取消注释。
+#Environment=NODE_EXTRA_CA_CERTS=/opt/fmkj/app/registry-ca.crt
+# 版本来源写在 .env（FMKJ_UPDATE_INDEX_URL，或 FMKJ_REGISTRY / FMKJ_REGISTRY_REPOSITORY），
+# 由脚本自己读，不在这里写死，换仓库地址不用改 unit。
+ExecStart=/opt/fmkj/tools/node/bin/node scripts/deploy/check-update.mjs
+# 只检查：连不上、仓库没配都算「检查完成」，结果写进 deploy-state/update-check.json，
+# 由管理员页面展示。失败在这里退非 0 只会让日志刷屏，不会让设备更安全。
+SuccessExitStatus=0
+Nice=10

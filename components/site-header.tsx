@@ -3,9 +3,10 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname, useSearchParams } from "next/navigation"
-import { Bell, Languages, Menu, Monitor, Moon, SearchIcon, Sun } from "lucide-react"
+import { Bell, Languages, Menu, Monitor, Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
 
+import { QuickJump } from "@/components/business/quick-jump"
 import { useI18n } from "@/lib/i18n"
 import { buildWorkbenchNav, showsWorkbenchNav } from "@/lib/workbench-nav"
 import { cn } from "@/lib/utils"
@@ -21,7 +22,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Kbd } from "@/components/ui/kbd"
 
 export function SiteHeader() {
   const pathname = usePathname()
@@ -56,7 +56,7 @@ export function SiteHeader() {
           </React.Suspense>
         ) : null}
         <div className="ml-auto flex min-w-0 items-center gap-1">
-          <SearchButton placeholder={t("header.search")} />
+          <QuickJump />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" aria-label={t("header.language")}>
@@ -164,25 +164,5 @@ function ThemeMenu() {
         </DropdownMenuCheckboxItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
-}
-
-function SearchButton({ placeholder }: { placeholder: string }) {
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      className="group relative h-8 w-full flex-1 justify-start rounded-md bg-muted/25 text-sm font-normal text-muted-foreground shadow-none hover:bg-accent sm:w-40 sm:pe-12 md:flex-none lg:w-52 xl:w-64"
-      aria-keyshortcuts="Meta+K Control+K"
-    >
-      <SearchIcon
-        aria-hidden="true"
-        className="absolute inset-s-1.5 top-1/2 size-4 -translate-y-1/2"
-      />
-      <span className="ms-4">{placeholder}</span>
-      <Kbd className="absolute inset-e-[0.3rem] top-[0.3rem] hidden rounded border bg-muted px-1.5 font-mono text-[10px] group-hover:bg-accent sm:flex">
-        <span className="text-xs">⌘</span>K
-      </Kbd>
-    </Button>
   )
 }

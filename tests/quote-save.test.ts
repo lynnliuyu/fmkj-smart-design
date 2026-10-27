@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 
+import { buildAccountContext } from "../lib/account-context.js"
 import { QuoteSaveError, saveQuoteDraft } from "../lib/quote-save.js"
 
 type QueryCall = {
@@ -11,7 +12,7 @@ class FakeQuoteClient {
   readonly calls: QueryCall[] = []
   released = false
 
-  constructor(private readonly options: { hasProject?: boolean; hasQuote?: boolean } = {}) {}
+  constructor(private readonly options: { hasProject?: boolean; hasQuote?: boolean; catalogCost?: number; projectCost?: number; savedCost?: number } = {}) {}
 
   async query<T>(sql: string, params?: unknown[]) {
     this.calls.push({ params, sql })
@@ -19,6 +20,20 @@ class FakeQuoteClient {
 
     if (normalized === "begin" || normalized === "commit" || normalized === "rollback") {
       return { rows: [] as T[] }
+    }
+
+    if (normalized.includes("coalesce(cost, 0)::float8 as cost from products")) {
+      return {
+        rows: this.options.catalogCost === undefined ? [] : [{ id: "44444444-4444-4444-8444-444444444444", cost: this.options.catalogCost }],
+      }
+    }
+
+    if (normalized.includes("from project_product_prices")) {
+      return { rows: this.options.projectCost === undefined ? [] : [{ product_id: "44444444-4444-4444-8444-444444444444", cost_price: this.options.projectCost }] }
+    }
+
+    if (normalized.includes("from quote_items")) {
+      return { rows: this.options.savedCost === undefined ? [] : [{ product_id: "44444444-4444-4444-8444-444444444444", room: "Living", cost_price: this.options.savedCost, product_snapshot: {} }] }
     }
 
     if (normalized.includes("from projects")) {
@@ -31,6 +46,8 @@ class FakeQuoteClient {
                   createdAt: new Date("2026-06-28T09:00:00.000Z"),
                   id: "11111111-1111-4111-8111-111111111111",
                   name: "Demo Project",
+                  createdBy: "11111111-1111-4111-8111-111111111111",
+                  accessLevel: "edit",
                 },
               ],
       }
@@ -69,6 +86,33 @@ class FakeQuotePool {
 }
 
 describe("quote save module", () => {
+  it("calculates total cost from the same rounded unit cost stored on each line", async () => {
+    const client = new FakeQuoteClient()
+    await saveQuoteDraft({
+      projectId: "11111111-1111-4111-8111-111111111111",
+      items: [{ cost: 0.335, discount: 100, name: "Fractional cost", price: 3, productId: "44444444-4444-4444-8444-444444444444", quantity: 3, room: "Living", spec: "", unit: "pc" }],
+    }, { db: new FakeQuotePool(client) as never })
+    expect(client.calls.find((call) => call.sql.toLowerCase().includes("insert into quotes"))?.params?.[7]).toBe(1.02)
+    expect(client.calls.find((call) => call.sql.toLowerCase().includes("insert into quote_items"))?.params?.[10]).toBe(0.34)
+  })
+  it.each([
+    { savedCost: 125, projectCost: 150, expected: 125 },
+    { projectCost: 150, expected: 150 },
+    { projectCost: 0, expected: 0 },
+  ])("preserves stored project costs for a member who cannot see costs: %j", async ({ expected, ...costs }) => {
+    const client = new FakeQuoteClient({ hasQuote: true, catalogCost: 200, ...costs })
+    const editor = buildAccountContext(
+      { userId: "11111111-1111-4111-8111-111111111111", name: "Editor", role: "editor" },
+      { id: "11111111-1111-4111-8111-111111111111", role: "editor", status: "active" },
+      { id: "99999999-9999-4999-8999-999999999999", name: "Team", role: "editor" },
+    )
+    await saveQuoteDraft({
+      projectId: "11111111-1111-4111-8111-111111111111",
+      items: [{ cost: 0, discount: 100, name: "Hidden cost", price: 300, productId: "44444444-4444-4444-8444-444444444444", quantity: 2, room: "Living", spec: "", unit: "pc" }],
+    }, { context: editor, db: new FakeQuotePool(client) as never })
+    expect(client.calls.find((call) => call.sql.toLowerCase().includes("update quotes"))?.params?.[6]).toBe(expected * 2)
+    expect(client.calls.find((call) => call.sql.toLowerCase().includes("insert into quote_items"))?.params?.[10]).toBe(expected)
+  })
   it("owns the transaction and saves a draft quote behind one interface", async () => {
     const client = new FakeQuoteClient()
     const result = await saveQuoteDraft(
@@ -122,6 +166,41 @@ describe("quote save module", () => {
     expect(client.released).toBe(true)
     expect(client.calls.some((call) => call.sql.includes("insert into quote_items"))).toBe(true)
     expect(client.calls.some((call) => call.sql.includes("update projects"))).toBe(true)
+  })
+
+  it("keeps an explicit zero cost instead of falling back to the catalogue", async () => {
+    const client = new FakeQuoteClient({ catalogCost: 200 })
+    await saveQuoteDraft(
+      {
+        projectId: "11111111-1111-4111-8111-111111111111",
+        items: [{ cost: 0, discount: 100, name: "Zero cost", price: 300, productId: "44444444-4444-4444-8444-444444444444", quantity: 2, room: "Living", spec: "", unit: "pc" }],
+      },
+      { createQuoteNo: () => "QT-ZERO", db: new FakeQuotePool(client) as never },
+    )
+    const quoteInsert = client.calls.find((call) => call.sql.toLowerCase().includes("insert into quotes"))
+    const itemInsert = client.calls.find((call) => call.sql.toLowerCase().includes("insert into quote_items"))
+    expect(quoteInsert?.params?.[7]).toBe(0)
+    expect(itemInsert?.params?.[10]).toBe(0)
+  })
+
+  it("ignores a hidden member's zero placeholder and uses the catalogue cost", async () => {
+    const client = new FakeQuoteClient({ catalogCost: 200 })
+    const editor = buildAccountContext(
+      { userId: "11111111-1111-4111-8111-111111111111", name: "Editor", role: "member" },
+      { id: "11111111-1111-4111-8111-111111111111", account_type: "ENTERPRISE_MEMBER", account_status: "active", role: "member" },
+      { id: "99999999-9999-4999-8999-999999999999", name: "Team", role: "editor" },
+    )
+    await saveQuoteDraft(
+      {
+        projectId: "11111111-1111-4111-8111-111111111111",
+        items: [{ cost: 0, discount: 100, name: "Hidden cost", price: 300, productId: "44444444-4444-4444-8444-444444444444", quantity: 2, room: "Living", spec: "", unit: "pc" }],
+      },
+      { context: editor, createQuoteNo: () => "QT-HIDDEN", db: new FakeQuotePool(client) as never },
+    )
+    const quoteInsert = client.calls.find((call) => call.sql.toLowerCase().includes("insert into quotes"))
+    const itemInsert = client.calls.find((call) => call.sql.toLowerCase().includes("insert into quote_items"))
+    expect(quoteInsert?.params?.[7]).toBe(400)
+    expect(itemInsert?.params?.[10]).toBe(200)
   })
 
   it("rolls back when the target project cannot be resolved", async () => {

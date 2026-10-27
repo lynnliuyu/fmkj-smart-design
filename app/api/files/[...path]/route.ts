@@ -19,6 +19,7 @@ type RouteContext = { params: Promise<{ path: string[] }> }
 export async function GET(_request: Request, context: RouteContext) {
   const account = await getCurrentAccountContext()
   if (!account) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 })
+  if (account.account.status !== "active") return NextResponse.json({ error: "ACCOUNT_DISABLED" }, { status: 403 })
 
   const { path: segments } = await context.params
   const pathname = (segments ?? []).join("/")
@@ -61,6 +62,7 @@ function notFound() {
 type Account = NonNullable<Awaited<ReturnType<typeof getCurrentAccountContext>>>
 
 async function canAccessProject(account: Account, projectId: string): Promise<boolean> {
+  if (!account.permissions.includes("project.view")) return false
   const visibility = projectVisibilityWhere(account, 1)
   const result = await getPool().query(
     `select 1 from projects p

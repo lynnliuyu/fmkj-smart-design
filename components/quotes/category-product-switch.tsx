@@ -112,9 +112,9 @@ export function CategoryProductSwitch({
   const currentName = currentChoice?.productId ? byId.get(currentChoice.productId)?.name ?? currentChoice.productId : null;
 
   return (
-    <div className="quote-print-hidden space-y-3 rounded-md border p-3">
+    <div className="quote-print-hidden space-y-3 rounded-md bg-muted/30 p-3">
       <div className="text-sm font-medium">本项目统一默认型号</div>
-      <p className="text-xs text-muted-foreground">仅影响本项目未指定商品的点位报价，已明确关联的商品与历史交付不变。默认型号作为未核验报价，仍需核对现场条件与供货规格。</p>
+      <p className="text-xs text-muted-foreground">仅影响本项目未指定商品的点位报价，已明确关联的商品与历史交付不变。</p>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr_1fr_2fr_auto] xl:items-end">
         <div className="grid gap-2">
           <Label>类别</Label>
@@ -149,7 +149,7 @@ export function CategoryProductSwitch({
           </Select>
         </div>
         <div className="flex gap-2">
-          <Button type="button" size="sm" disabled={!projectId || !productId || busy} onClick={() => save(productId)}>应用到本项目</Button>
+          <Button type="button" size="sm" variant="outline" disabled={!projectId || !productId || busy} onClick={() => save(productId)}>应用到本项目</Button>
           <Button type="button" size="sm" variant="outline" disabled={!projectId || !currentChoice?.productId || busy} onClick={() => save(null)}>恢复标准</Button>
         </div>
       </div>

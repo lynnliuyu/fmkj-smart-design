@@ -33,6 +33,20 @@ beforeEach(() => {
 })
 
 describe("attachments API authorization", () => {
+  it("refuses reads by a disabled account", async () => {
+    session.getCurrentAccountContext.mockResolvedValue(disabled())
+    expect((await GET(new NextRequest(`http://localhost/api/attachments?projectId=${body.projectId}`))).status).toBe(403)
+    expect(db.query).not.toHaveBeenCalled()
+  })
+
+  it("refuses a visible project assigned as read-only, before writing an attachment", async () => {
+    session.getCurrentAccountContext.mockResolvedValue(buildAccountContext(sessionUser, { id: sessionUser.userId, role: "editor", status: "active" }, { id: "org_1", name: "Org", role: "editor" }))
+    db.query.mockResolvedValueOnce({ rowCount: 1, rows: [{ createdBy: sessionUser.userId, accessLevel: "view" }] })
+    const response = await POST(post(body))
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({ error: "PROJECT_READ_ONLY" })
+    expect(db.query).toHaveBeenCalledTimes(1)
+  })
   it("refuses reads without a session", async () => {
     session.getCurrentAccountContext.mockResolvedValue(null)
 

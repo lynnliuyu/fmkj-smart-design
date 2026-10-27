@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { getCurrentAccountContext } from "@/lib/account-context"
 import { fileStorage } from "@/lib/file-storage"
-
-const folderByKind: Record<string, string> = {
-  avatar: "avatars",
-  company_logo: "company-logos",
-  contract: "contracts",
-  floorplan: "floorplans",
-  product_image: "product-images",
-  quote_pdf: "quote-pdfs",
-}
+import { canWriteProjectMembership, projectVisibilityWhere, type ProjectMembershipAccess } from "@/lib/project-access"
+import { getPool } from "@/lib/server-db"
+import { authorizeUpload } from "@/lib/upload-access"
 
 // --- Security guards -------------------------------------------------------
 
@@ -33,19 +28,13 @@ const ALLOWED_MIME_TYPES = new Set([
   "text/csv",
 ])
 
-function getAuthenticatedUserId(request: NextRequest): string | null {
-  const userId = request.headers.get("x-user-id")
-  if (!userId || userId === "undefined" || userId === "null") return null
-  return userId
-}
-
 // ---------------------------------------------------------------------------
 
 export async function POST(request: NextRequest) {
   try {
-    // --- Auth check (middleware injects x-user-id from JWT) ---
-    const userId = getAuthenticatedUserId(request)
-    if (!userId) {
+    // 归属授权看的是会话里的账号，不再只信中间件塞进来的 x-user-id 头。
+    const context = await getCurrentAccountContext()
+    if (!context) {
       return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 })
     }
 
@@ -53,6 +42,14 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file")
     const kind = clean(formData.get("kind")) || "attachment"
     const entityId = clean(formData.get("entityId")) || "general"
+
+    const access = await authorizeUpload(context, kind, entityId, {
+      canEditProject: (projectId) => canEditProject(context, projectId),
+      productExists: (productId) => productExists(productId),
+    })
+    if (!access.ok) {
+      return NextResponse.json({ error: access.reason }, { status: access.status })
+    }
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "FILE_REQUIRED" }, { status: 400 })
@@ -76,8 +73,8 @@ export async function POST(request: NextRequest) {
     }
 
     const stored = await fileStorage().save({
-      kind: folderByKind[kind] ?? "attachments",
-      ownerId: entityId,
+      kind: access.folder,
+      ownerId: access.ownerId,
       filename: file.name,
       bytes: new Uint8Array(await file.arrayBuffer()),
       contentType,
@@ -104,5 +101,36 @@ export async function POST(request: NextRequest) {
 
 function clean(value: FormDataEntryValue | null) {
   return String(value ?? "").trim()
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** 能不能把文件挂到这个项目上：项目可见性 + project.edit 权限，和别处同一套规则。 */
+async function canEditProject(context: NonNullable<Awaited<ReturnType<typeof getCurrentAccountContext>>>, projectId: string) {
+  if (!UUID.test(projectId)) return false
+  try {
+    const visibility = projectVisibilityWhere(context, 1)
+    const actorParameter = `$${visibility.params.length + 2}`
+    const result = await getPool().query<ProjectMembershipAccess>(
+      `select p.created_by::text as "createdBy",
+        (select pm.access_level::text from project_members pm
+         where pm.project_id = p.id and pm.user_id = ${actorParameter}::uuid and pm.status = 'active'
+         limit 1) as "accessLevel"
+       from projects p where p.id = $1::uuid and p.deleted_at is null and (${visibility.where})`,
+      [projectId, ...visibility.params, context.user.userId],
+    )
+    return Boolean(result.rows[0] && canWriteProjectMembership(context, result.rows[0]))
+  } catch {
+    return false
+  }
+}
+
+async function productExists(productId: string) {
+  try {
+    const result = await getPool().query("select 1 from products where id = $1::uuid and deleted_at is null", [productId])
+    return Boolean(result.rowCount)
+  } catch {
+    return false
+  }
 }
 

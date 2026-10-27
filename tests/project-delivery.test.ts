@@ -113,6 +113,22 @@ describe("immutable project delivery snapshots", () => {
     expect(client.calls[0].sql).toBe("begin isolation level repeatable read read only")
   })
 
+  it("filters internal costs from preview and historical snapshots for ordinary members", async () => {
+    const client = new MemoryClient()
+    client.savedQuote!.items[0].productSnapshot = { name: "原报价商品名", cost: 4, nested: { costPrice: 5 }, image: "/assets/old.png" }
+    const editor = account("ENTERPRISE_MEMBER")
+    const preview = await previewProjectDelivery(editor, PROJECT, deps(client))
+    expect(preview.quote!.items[0]).not.toHaveProperty("cost")
+    expect(preview.quote!.items[0].productSnapshot).not.toHaveProperty("cost")
+    expect(preview.quote!.items[0].productSnapshot?.nested).not.toHaveProperty("costPrice")
+
+    const stored = await createProjectDelivery(account(), PROJECT, deps(client))
+    expect(stored.quote!.items[0].cost).toBe(4)
+    const historical = await getProjectDelivery(editor, PROJECT, stored.id!, deps(client))
+    expect(historical.quote!.items[0]).not.toHaveProperty("cost")
+    expect(historical.quote!.items[0].productSnapshot).not.toHaveProperty("cost")
+  })
+
   it("freezes visual derivatives and crop settings while treating remote source-image evidence as provenance", async () => {
     const client = new MemoryClient()
     const visual: ProductVisualAsset = { image: "/assets/clean.png", sourceImage: "https://official.example/original.png", crop: { x: 0.1, y: 0.1, width: 0.6, height: 0.8 }, scale: 1.2, reviewStatus: "verified", revision: 3, updatedAt: NOW.toISOString(), evidence: "official" }
@@ -228,6 +244,12 @@ describe("immutable project delivery snapshots", () => {
 })
 
 describe("delivery source contracts and amounts", () => {
+  it("accepts legacy room names that already include their floor prefix", () => {
+    const current = plan()
+    current.points[0].room = "一楼 / 客厅"
+    expect(assertDeliverySources(current, quote())).toBe(0)
+  })
+
   it("respects exact quote selection over a different draft product without revision-only conflicts", () => {
     const current = plan(), saved = quote()
     current.points[0].productId = OTHER_PRODUCT

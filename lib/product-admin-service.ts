@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from "pg"
 
 import { normalizeProductCategory } from "./product-categories"
+import { normalizeProductPlatforms, primaryPlatformLabel } from "./product-platforms"
 import { getPool } from "./server-db"
 import { productSelectionWithDefaults, validateProductSelectionFields, type ProductSelectionFields } from "./product-selection"
 
@@ -21,6 +22,8 @@ export type AdminProduct = Required<ProductSelectionFields> & {
   image: string | null
   name: string
   platform: string | null
+  platforms?: string[] | null
+  series?: string | null
   price: number
   reviewNote: string | null
   reviewedAt: string | null
@@ -61,6 +64,8 @@ export type ProductRow = {
   image: string | null
   name: string
   platform: string | null
+  series?: string | null
+  platforms?: string[] | null
   price: number | string | null
   review_note: string | null
   reviewed_at: Date | string | null
@@ -119,23 +124,25 @@ export async function listAdminProducts(status?: string | null) {
   return result.rows.map(mapProduct)
 }
 
-export async function createAdminProduct(input: ProductMutationInput & { actorUserId: string }) {
+/** `actorUserId` 允许为空：官方资料定时同步没有具体操作人，审计上如实记成「系统」。 */
+export async function createAdminProduct(input: ProductMutationInput & { actorUserId: string | null }) {
   validateProduct(input)
   const selection = prepareProductSelection(input)
   return inProductTransaction(async (db) => {
     await validateParent(db, selection)
-    const params = [...productMutationParams(input, input.status ?? "pending_review"), ...selectionParams(selection)]
+    const params = [...productMutationParams(input, input.status ?? "pending_review"), ...selectionParams(selection), platformsParam(input), normalizeOptional(input.series)]
     const result = await db.query<ProductRow>(`
       insert into products (
         created_by, updated_by, submitted_by, name, brand, platform, category, sku, unit,
         price, cost, stock, image, description, tags, channels, status,
         catalog_kind, device_type_id, parent_product_id, manufacturer_model, specs, protocols, capabilities,
         selection_status, selection_evidence, pricing_status, pricing_evidence, mapping_revision,
-        selection_reviewed_by, selection_reviewed_at
+        selection_reviewed_by, selection_reviewed_at, platforms, series
       ) values ($1::uuid,$1::uuid,$1::uuid,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15,
         $16,$17,$18::uuid,$19,$20::jsonb,$21::jsonb,$22::jsonb,$23,$24,$25,$26,$27,
         case when $23 = 'verified' then $1::uuid else null end,
-        case when $23 = 'verified' then now() else null end)
+        case when $23 = 'verified' then now() else null end,
+          $28::text[], $29)
       returning ${productColumns()}`, params)
     const product = mapProduct(result.rows[0])
     await recordProductActivity(db, { action: "product.created", actorUserId: input.actorUserId,
@@ -144,7 +151,7 @@ export async function createAdminProduct(input: ProductMutationInput & { actorUs
   })
 }
 
-export async function updateAdminProduct(input: ProductMutationInput & { actorUserId: string; productId: string }) {
+export async function updateAdminProduct(input: ProductMutationInput & { actorUserId: string | null; productId: string }) {
   validateProduct(input)
   return inProductTransaction(async (db) => {
     const before = await lockProduct(db, input.productId)
@@ -165,9 +172,9 @@ export async function updateAdminProduct(input: ProductMutationInput & { actorUs
         manufacturer_model=$19, specs=$20::jsonb, protocols=$21::jsonb, capabilities=$22::jsonb,
         selection_status=$23, selection_evidence=$24, pricing_status=$25, pricing_evidence=$26, mapping_revision=$27,
         selection_reviewed_by=case when $23<>'verified' then null when $29 then $1::uuid else selection_reviewed_by end,
-        selection_reviewed_at=case when $23<>'verified' then null when $29 then now() else selection_reviewed_at end, updated_at=now()
+        selection_reviewed_at=case when $23<>'verified' then null when $29 then now() else selection_reviewed_at end, platforms=$30::text[], series=$31, updated_at=now()
       where id=$28::uuid and deleted_at is null returning ${productColumns()}`,
-      [...productMutationParams(input, input.status ?? null), ...selectionParams(selection), input.productId, selection.selectionStatus === "verified" && (before.selectionStatus !== "verified" || selection.selectionEvidence !== before.selectionEvidence)])
+      [...productMutationParams(input, input.status ?? null), ...selectionParams(selection), input.productId, selection.selectionStatus === "verified" && (before.selectionStatus !== "verified" || selection.selectionEvidence !== before.selectionEvidence), platformsParam(input), normalizeOptional(input.series)])
     const product = mapProduct(result.rows[0])
     await recordProductActivity(db, { action: "product.updated", actorUserId: input.actorUserId,
       description: `更新产品 ${product.name}，映射版本 ${product.mappingRevision}`, entityId: product.id,
@@ -328,6 +335,8 @@ export type ProductMutationInput = Partial<ProductSelectionFields> & {
   image?: string | null
   name: string
   platform?: string | null
+  platforms?: string[] | null
+  series?: string | null
   price?: number
   sku: string
   status?: ProductModerationStatus | null
@@ -346,6 +355,8 @@ export function productColumns() {
     name,
     brand,
     platform,
+      coalesce(platforms, '{}'::text[]) as platforms,
+      series,
     category,
     sku,
     unit,
@@ -369,12 +380,14 @@ export function productColumns() {
   `
 }
 
-function productMutationParams(input: ProductMutationInput & { actorUserId: string }, status: ProductModerationStatus | null) {
+function productMutationParams(input: ProductMutationInput & { actorUserId: string | null }, status: ProductModerationStatus | null) {
+  const normalizedPlatforms = normalizeProductPlatforms(input.platforms ?? input.platform).values
   return [
     input.actorUserId,
     input.name.trim(),
     normalizeOptional(input.brand),
-    normalizeOptional(input.platform),
+    // platform 列保留为「首选平台」的中文名：快速报价、类目推断这些按单值工作的逻辑照旧。
+    primaryPlatformLabel(normalizedPlatforms) ?? normalizeOptional(input.platform),
     normalizeProductCategory(input.category, input.name, input.brand, input.platform, input.description, input.sku),
     input.sku.trim(),
     normalizeProductUnit(input.unit),
@@ -388,6 +401,12 @@ function productMutationParams(input: ProductMutationInput & { actorUserId: stri
     status,
   ]
 }
+
+/** 多值平台：追加在参数数组**末尾**，避免打乱插入/更新语句里既有的 $1..$27 编号。 */
+function platformsParam(input: ProductMutationInput & { actorUserId: string | null }): string[] {
+  return normalizeProductPlatforms(input.platforms ?? input.platform).values
+}
+
 
 function validateProduct(input: ProductMutationInput) {
   const details: Record<string, string> = {}
@@ -406,7 +425,7 @@ async function recordProductActivity(
   db: Queryable,
   input: {
     action: string
-    actorUserId: string
+    actorUserId: string | null
     description: string
     entityId: string
     entityLabel: string
@@ -433,13 +452,23 @@ async function recordProductActivity(
 }
 
 export function mapProduct(row: ProductRow): AdminProduct {
+  const selection = {
+    catalogKind: row.catalog_kind, deviceTypeId: row.device_type_id, parentProductId: row.parent_product_id,
+    manufacturerModel: row.manufacturer_model, specs: row.specs, protocols: row.protocols, capabilities: row.capabilities,
+    selectionStatus: row.selection_status, selectionEvidence: row.selection_evidence,
+    pricingStatus: row.pricing_status, pricingEvidence: row.pricing_evidence, mappingRevision: row.mapping_revision,
+  }
+  // 一行数据不合规不该让整个产品列表接口挂掉：必填规则收紧后，历史核验过的产品可能缺了新必填项，
+  // 读取时直接抛异常会让「产品库」整页打不开。这里退一步，把这一行按「待核验」返回，让人在界面上处理。
+  let selectionFields
+  try {
+    selectionFields = productSelectionWithDefaults(selection)
+  } catch (error) {
+    console.warn(`[products] 产品 ${row.sku} 的选型信息不合规，已按待核验返回：`, error instanceof Error ? error.message : error)
+    selectionFields = productSelectionWithDefaults({ ...selection, selectionStatus: "pending" })
+  }
   return {
-    ...productSelectionWithDefaults({
-      catalogKind: row.catalog_kind, deviceTypeId: row.device_type_id, parentProductId: row.parent_product_id,
-      manufacturerModel: row.manufacturer_model, specs: row.specs, protocols: row.protocols, capabilities: row.capabilities,
-      selectionStatus: row.selection_status, selectionEvidence: row.selection_evidence,
-      pricingStatus: row.pricing_status, pricingEvidence: row.pricing_evidence, mappingRevision: row.mapping_revision,
-    }),
+    ...selectionFields,
     selectionReviewedBy: row.selection_reviewed_by ?? null,
     selectionReviewedAt: row.selection_reviewed_at ? toIsoString(row.selection_reviewed_at) : null,
     brand: row.brand,
@@ -452,6 +481,8 @@ export function mapProduct(row: ProductRow): AdminProduct {
     image: row.image,
     name: row.name,
     platform: row.platform,
+    platforms: normalizeStringArray(row.platforms),
+    series: row.series ?? null,
     price: Number(row.price ?? 0),
     reviewNote: row.review_note,
     reviewedAt: row.reviewed_at ? toIsoString(row.reviewed_at) : null,

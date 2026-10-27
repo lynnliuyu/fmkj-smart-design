@@ -63,7 +63,7 @@ export default async function AdminOverviewPage() {
       <section className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold tracking-tight">平台管理概览</h2>
+            <h2 className="text-2xl font-bold tracking-tight">平台管理概览</h2>
             <Badge variant="secondary" className="gap-1">
               <ShieldCheck className="size-3" />
               仅超级管理员可见

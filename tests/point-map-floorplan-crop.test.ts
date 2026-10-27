@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { cropPercentPosition, findFloorplanCrop } from "../lib/point-map-crop-geometry.mjs";
-import { applyPointMapFloorplanCrop } from "../lib/point-map-floorplan-crop";
+import { applyPointMapFloorplanCrop, commitPointMapFloorplanCrop } from "../lib/point-map-floorplan-crop";
 import { emptyPointMapPlan, type PointMapPlan } from "../lib/point-map-plan";
 import { fingerprintFloorplan, resolvePointMapBackground } from "../lib/point-map-presentation";
 import { percentToCad } from "../lib/point-map-cad-contract";
@@ -72,5 +72,37 @@ describe("floorplan whitespace policy", () => {
     await expect(applyPointMapFloorplanCrop(plan, "one", png, crop, image)).rejects.toThrow(/校准已失效/);
     plan.floors![0].presentation!.sourceFingerprint = before.floors![0].presentation!.sourceFingerprint;
     expect(plan).toEqual(before);
+  });
+
+  it.each(["edit", "undo", "project", "floor", "source", "read-only"])("does not overwrite %s changes made while the original draft is being backed up", async (change) => {
+    const before = await fixture(false);
+    const next = await applyPointMapFloorplanCrop(before, "one", png, crop, image);
+    let context = { plan: before, projectId: before.projectId, editingDisabled: false };
+    let releaseBackup!: (stored: boolean) => void;
+    const pendingBackup = new Promise<boolean>((resolve) => { releaseBackup = resolve; });
+    const apply = vi.fn();
+    const operation = commitPointMapFloorplanCrop({ before, next, floorId: "one", source: png, current: () => context, backup: () => pendingBackup, apply });
+    if (change === "edit") context = { ...context, plan: { ...before, points: before.points.map((point) => ({ ...point, name: "等待期间的新编辑" })) } };
+    if (change === "undo") context = { ...context, plan: { ...before, points: [] } };
+    if (change === "project") context = { ...context, projectId: "other-project" };
+    if (change === "floor") context.plan.activeFloorId = "two";
+    if (change === "source") context.plan.floors![0].floorplanDataUrl = "replacement-image";
+    if (change === "read-only") context = { ...context, editingDisabled: true };
+    releaseBackup(true);
+    await expect(operation).rejects.toThrow(/已变化/);
+    expect(apply).not.toHaveBeenCalled();
+    if (change === "edit") expect(context.plan.points[0].name).toBe("等待期间的新编辑");
+    if (change === "undo") expect(context.plan.points).toEqual([]);
+  });
+
+  it.each([true, false])("applies unchanged drafts once even when persistent backup success is %s", async (stored) => {
+    const before = await fixture(false);
+    const next = await applyPointMapFloorplanCrop(before, "one", png, crop, image);
+    const apply = vi.fn();
+    await expect(commitPointMapFloorplanCrop({ before, next, floorId: "one", source: png,
+      current: () => ({ plan: before, projectId: before.projectId, editingDisabled: false }),
+      backup: async () => stored, apply,
+    })).resolves.toBe(stored);
+    expect(apply).toHaveBeenCalledExactlyOnceWith(next);
   });
 });

@@ -141,31 +141,62 @@ export async function createTeamMember(input: {
 
   if (existing.rows[0]) throw new AccountTeamError("MEMBER_ALREADY_EXISTS", 409)
 
-  const user = await upsertCreatedMemberUser(db, {
-    email,
-    name: input.name?.trim() || email.split("@")[0] || "新成员",
-    password: input.password?.trim(),
-  })
-
-  await db.query(
-    `
-    insert into organization_members (organization_id, user_id, role_id, member_status)
-    values ($1, $2, $3, 'active')
-    on conflict (organization_id, user_id)
-    do update set role_id = excluded.role_id, member_status = 'active', updated_at = now()
-    `,
-    [organization.id, user.id, role.id],
+  // Reject an existing account before opening the write transaction as a fast,
+  // deterministic response; the transaction repeats this check for races.
+  const globalExisting = await db.query<{ id: string }>(
+    "select id::text from users where lower(email) = $1 limit 1",
+    [email],
   )
+  if (globalExisting.rows[0]) throw new AccountTeamError("USER_ALREADY_EXISTS", 409)
 
-  await db.query(
-    `
-    insert into account_profiles (user_id, account_type, account_status, organization_id)
-    values ($1, 'ENTERPRISE_MEMBER', 'active', $2)
-    on conflict (user_id)
-    do update set account_type = 'ENTERPRISE_MEMBER', account_status = 'active', organization_id = excluded.organization_id, updated_at = now()
-    `,
-    [user.id, organization.id],
-  )
+  // User creation, membership insertion and profile assignment must commit
+  // together. An existing global email is rejected inside the same transaction;
+  // it is never converted into an enterprise member or moved between companies.
+  const client = (await db.connect()) as TransactionClient
+  try {
+    await client.query("begin")
+    const globalExisting = await client.query<{ id: string }>(
+      "select id::text from users where lower(email) = $1 limit 1",
+      [email],
+    )
+    if (globalExisting.rows[0]) throw new AccountTeamError("USER_ALREADY_EXISTS", 409)
+
+    const user = await upsertCreatedMemberUser(client, {
+      email,
+      name: input.name?.trim() || email.split("@")[0] || "新成员",
+      password: input.password?.trim(),
+    })
+
+    await client.query(
+      `
+      insert into organization_members (organization_id, user_id, role_id, member_status)
+      values ($1, $2, $3, 'active')
+      on conflict (organization_id, user_id)
+      do update set role_id = excluded.role_id, member_status = 'active', updated_at = now()
+      `,
+      [organization.id, user.id, role.id],
+    )
+
+    await client.query(
+      `
+      insert into account_profiles (user_id, account_type, account_status, organization_id)
+      values ($1, 'ENTERPRISE_MEMBER', 'active', $2)
+      on conflict (user_id)
+      do update set account_type = 'ENTERPRISE_MEMBER', account_status = 'active', organization_id = excluded.organization_id, updated_at = now()
+      `,
+      [user.id, organization.id],
+    )
+    await client.query("commit")
+  } catch (error) {
+    await client.query("rollback")
+    // A concurrent signup can win the unique email constraint after both
+    // preflight checks. Keep the public contract as a clean 409 instead of
+    // exposing a database error or partially applying team writes.
+    if (isUniqueViolation(error)) throw new AccountTeamError("USER_ALREADY_EXISTS", 409)
+    throw error
+  } finally {
+    client.release()
+  }
 
   return getAccountTeam(input.context)
 }
@@ -363,6 +394,25 @@ async function requireManagedOrganization(context: AccountContext) {
 
 async function ensureOrganizationForOwner(context: AccountContext) {
   const db = getPool()
+
+  // A member with team-management permission must manage the organization
+  // already attached to the current account context. Never create a second
+  // organization or move the account profile just because the member opened
+  // the team page.
+  if (context.organization?.id) {
+    const associated = await db.query<{ id: string; name: string; ownerUserId: string }>(
+      `
+      select id::text, name, owner_user_id::text as "ownerUserId"
+      from organizations
+      where id = $1 and status = 'active'
+      limit 1
+      `,
+      [context.organization.id],
+    )
+    if (!associated.rows[0]) throw new AccountTeamError("ORGANIZATION_NOT_FOUND", 404)
+    return associated.rows[0]
+  }
+
   const existing = await db.query<{ id: string; name: string; ownerUserId: string }>(
     `
     select id::text, name, owner_user_id::text as "ownerUserId"
@@ -374,6 +424,9 @@ async function ensureOrganizationForOwner(context: AccountContext) {
   )
 
   if (existing.rows[0]) return existing.rows[0]
+  if (context.account.type !== "ENTERPRISE_OWNER" && context.account.type !== "SUPER_ADMIN") {
+    throw new AccountTeamError("ORGANIZATION_REQUIRED", 403)
+  }
 
   const created = await db.query<{ id: string; name: string; ownerUserId: string }>(
     `
@@ -554,12 +607,16 @@ async function getPlanById(db: Queryable, planId: string) {
   return result.rows[0] ?? null
 }
 
+function isUniqueViolation(error: unknown) {
+  return Boolean(error && typeof error === "object" && "code" in error && String((error as { code?: unknown }).code) === "23505")
+}
+
 async function upsertCreatedMemberUser(db: Queryable, input: { email: string; name: string; password?: string }) {
   const existing = await db.query<{ id: string }>(
     "select id::text from users where lower(email) = $1 limit 1",
     [input.email],
   )
-  if (existing.rows[0]) return existing.rows[0]
+  if (existing.rows[0]) throw new AccountTeamError("USER_ALREADY_EXISTS", 409)
 
   const passwordHash = await bcrypt.hash(input.password || randomUUID(), 10)
   const roleId = await getDefaultUserRoleId(db)

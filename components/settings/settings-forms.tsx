@@ -37,6 +37,7 @@ export function ProfileSettingsForm() {
   const [message, setMessage] = useState("")
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState<"avatar" | "company_logo" | null>(null)
+  const canManageCompany = profile.isSuperAdmin || profile.permissions.includes("enterprise.manage_members")
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -50,7 +51,7 @@ export function ProfileSettingsForm() {
   }, [profile])
 
   async function uploadImage(file: File | null, kind: "avatar" | "company_logo") {
-    if (!file) return
+    if (!file || (kind === "company_logo" && !canManageCompany)) return
     setMessage("")
     setUploading(kind)
 
@@ -79,7 +80,11 @@ export function ProfileSettingsForm() {
     setSaving(true)
     setMessage("")
     const response = await fetch("/api/account/profile", {
-      body: JSON.stringify({ avatarUrl, companyAvatarUrl, companyName, name }),
+      body: JSON.stringify({
+        avatarUrl,
+        name,
+        ...(canManageCompany ? { companyAvatarUrl, companyName } : {}),
+      }),
       headers: { "Content-Type": "application/json" },
       method: "PATCH",
     })
@@ -114,20 +119,20 @@ export function ProfileSettingsForm() {
               uploading={uploading === "avatar"}
               onUpload={(file) => void uploadImage(file, "avatar")}
             />
-            <AvatarUpload
+            {canManageCompany ? <AvatarUpload
               label="左上角头像"
               name={companyName || name}
               url={companyAvatarUrl}
               uploading={uploading === "company_logo"}
               onUpload={(file) => void uploadImage(file, "company_logo")}
-            />
+            /> : null}
           </div>
           <Field label="显示名称" htmlFor="profile-name">
             <Input id="profile-name" value={name} onChange={(event) => setName(event.target.value)} />
           </Field>
-          <Field label="公司名称" htmlFor="profile-company">
+          {canManageCompany ? <Field label="公司名称" htmlFor="profile-company">
             <Input id="profile-company" value={companyName} onChange={(event) => setCompanyName(event.target.value)} />
-          </Field>
+          </Field> : null}
           {message ? <div className="text-sm text-muted-foreground">{message}</div> : null}
           <Button type="button" className="w-fit" disabled={saving || uploading !== null} onClick={() => void saveProfile()}>
             <Save className="size-4" />
@@ -250,7 +255,7 @@ export function NotificationsSettingsForm() {
             <SwitchLine label="安全邮件" checked disabled />
           </div>
 
-          <div className="flex items-center gap-3 rounded-lg border p-4">
+          <div className="flex items-center gap-3 rounded-lg bg-muted/40 p-4">
             <Checkbox id="mobile-notify" defaultChecked />
             <Label htmlFor="mobile-notify">移动端使用独立通知策略</Label>
           </div>
@@ -276,7 +281,7 @@ function AvatarUpload({
   url: string
 }) {
   return (
-    <div className="flex items-center gap-4 rounded-lg border p-4">
+    <div className="flex items-center gap-4 rounded-lg bg-muted/40 p-4">
       <Avatar className="size-14">
         <AvatarImage src={url || undefined} alt={name} />
         <AvatarFallback>{getInitials(name)}</AvatarFallback>
@@ -355,7 +360,7 @@ function SwitchLine({
   disabled?: boolean
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+    <div className="flex items-center justify-between gap-4 rounded-lg bg-muted/40 px-4 py-3">
       <div className="font-medium">{label}</div>
       <Switch defaultChecked={checked} disabled={disabled} />
     </div>
